@@ -23,8 +23,9 @@ async function safeJsonParse(response) {
 
 // Load users on page load
 window.addEventListener('DOMContentLoaded', () => {
-    loadUsers();
+    // Check auth first, then load users (so match percentages are included)
     checkAuth();
+    loadUsers();
 });
 
 // Check if user is logged in
@@ -192,6 +193,8 @@ function openProfileModal() {
     document.getElementById('profilePictureUrl').value = currentUser.profile_picture || '';
     document.getElementById('profileBio').value = currentUser.bio || '';
     document.getElementById('profileLocation').value = currentUser.location || '';
+    document.getElementById('profileLinkedIn').value = currentUser.linkedin_url || '';
+    document.getElementById('profileGitHub').value = currentUser.github_url || '';
     
     interests = currentUser.interests || [];
     languages = currentUser.looking_for || [];
@@ -328,7 +331,9 @@ document.getElementById('profileForm').addEventListener('submit', async (e) => {
         bio: document.getElementById('profileBio').value || null,
         interests: interests,
         looking_for: languages,
-        location: document.getElementById('profileLocation').value || null
+        location: document.getElementById('profileLocation').value || null,
+        linkedin_url: document.getElementById('profileLinkedIn').value || null,
+        github_url: document.getElementById('profileGitHub').value || null
     };
     
     try {
@@ -419,6 +424,12 @@ function loadUsers() {
                                 ${user.looking_for.map(l => `<span class="skill-tag">${l}</span>`).join('')}
                             </div>
                         ` : ''}
+                        ${(user.linkedin_url || user.github_url) ? `
+                            <div class="social-links" style="margin-top: 12px; display: flex; gap: 10px;">
+                                ${user.linkedin_url ? `<a href="${user.linkedin_url}" target="_blank" rel="noopener noreferrer" class="social-link linkedin">🔗 LinkedIn</a>` : ''}
+                                ${user.github_url ? `<a href="${user.github_url}" target="_blank" rel="noopener noreferrer" class="social-link github">💻 GitHub</a>` : ''}
+                            </div>
+                        ` : ''}
                     </div>
                 `;
             }).join('');
@@ -472,9 +483,15 @@ document.getElementById('matchForm').addEventListener('submit', async (e) => {
                 const initials = user.full_name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
                 const avatar = user.profile_picture || `data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%2250%22 height=%2250%22%3E%3Ccircle cx=%2225%22 cy=%2225%22 r=%2223%22 fill=%22%231dbf73%22/%3E%3Ctext x=%2225%22 y=%2230%22 font-size=%2216%22 fill=%22white%22 text-anchor=%22middle%22%3E${initials}%3C/text%3E%3C/svg%3E`;
                 
+                // Interest match percentage
+                const interestMatch = user.interest_match !== undefined && user.interest_match !== null
+                    ? `<div class="interest-match-score">${(user.interest_match * 100).toFixed(0)}% Interest Match</div>`
+                    : '';
+                
                 return `
                     <div class="match-card">
-                        <div class="match-score">${(match.match_score * 100).toFixed(0)}% Match</div>
+                        <div class="match-score">${(match.match_score * 100).toFixed(0)}% Skill Match</div>
+                        ${interestMatch}
                         <div class="match-card-header">
                             <div class="user-card-header">
                                 <img src="${avatar}" alt="${user.full_name}" class="user-avatar" onerror="this.src='data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%2250%22 height=%2250%22%3E%3Ccircle cx=%2225%22 cy=%2225%22 r=%2223%22 fill=%22%231dbf73%22/%3E%3Ctext x=%2225%22 y=%2230%22 font-size=%2216%22 fill=%22white%22 text-anchor=%22middle%22%3E${initials}%3C/text%3E%3C/svg%3E'">
@@ -485,6 +502,12 @@ document.getElementById('matchForm').addEventListener('submit', async (e) => {
                             </div>
                         </div>
                         ${user.bio ? `<div class="bio">${user.bio}</div>` : ''}
+                        ${(user.linkedin_url || user.github_url) ? `
+                            <div class="social-links" style="margin-bottom: 15px; display: flex; gap: 10px;">
+                                ${user.linkedin_url ? `<a href="${user.linkedin_url}" target="_blank" rel="noopener noreferrer" class="social-link linkedin">🔗 LinkedIn</a>` : ''}
+                                ${user.github_url ? `<a href="${user.github_url}" target="_blank" rel="noopener noreferrer" class="social-link github">💻 GitHub</a>` : ''}
+                            </div>
+                        ` : ''}
                         <div class="match-details">
                             ${match.complementary_skills.length > 0 ? `
                                 <div class="match-detail-row">

@@ -37,6 +37,8 @@ class UserUpdate(BaseModel):
     location: Optional[str] = None
     timezone: Optional[str] = None
     availability: Optional[str] = None
+    linkedin_url: Optional[str] = None
+    github_url: Optional[str] = None
     skill_names: Optional[List[str]] = None
 
 
@@ -62,6 +64,8 @@ class UserResponse(BaseModel):
     location: Optional[str] = None
     timezone: Optional[str] = None
     availability: Optional[str] = None
+    linkedin_url: Optional[str] = None
+    github_url: Optional[str] = None
     skills: List[SkillResponse] = []
     interest_match: Optional[float] = None  # Match percentage with current user
     created_at: datetime

@@ -17,11 +17,15 @@
                     <button class="btn-primary" id="signupBtn">Sign Up</button>
                 </div>
                 <div class="user-profile" id="userProfile" style="display: none;">
-                    <div class="profile-dropdown">
-                        <img src="" alt="Profile" class="profile-img" id="profileImg" onerror="this.src='data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%2240%22 height=%2240%22%3E%3Ccircle cx=%2220%22 cy=%2220%22 r=%2218%22 fill=%22%231dbf73%22/%3E%3Ctext x=%2220%22 y=%2225%22 font-size=%2214%22 fill=%22white%22 text-anchor=%22middle%22%3E?%3C/text%3E%3C/svg%3E'">
-                        <span id="profileName"></span>
-                        <button class="btn-link" id="editProfileBtn">Edit Profile</button>
-                        <button class="btn-link" id="logoutBtn">Logout</button>
+                    <div class="profile-container">
+                        <img src="" alt="Profile" class="profile-img" id="profileImg" onerror="this.src='data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%2255%22 height=%2255%22%3E%3Ccircle cx=%2227.5%22 cy=%2227.5%22 r=%2225%22 fill=%22%231dbf73%22/%3E%3Ctext x=%2227.5%22 y=%2232%22 font-size=%2218%22 fill=%22white%22 text-anchor=%22middle%22%3E?%3C/text%3E%3C/svg%3E'">
+                        <div class="profile-dropdown">
+                            <div class="dropdown-header">
+                                <span id="profileName"></span>
+                            </div>
+                            <button class="dropdown-item" id="editProfileBtn">Edit Profile</button>
+                            <button class="dropdown-item" id="logoutBtn">Logout</button>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -124,6 +128,14 @@
                 <div class="form-group">
                     <label>Location</label>
                     <input type="text" id="profileLocation" placeholder="City, Country">
+                </div>
+                <div class="form-group">
+                    <label>LinkedIn Profile URL</label>
+                    <input type="url" id="profileLinkedIn" placeholder="https://linkedin.com/in/yourprofile">
+                </div>
+                <div class="form-group">
+                    <label>GitHub Profile URL</label>
+                    <input type="url" id="profileGitHub" placeholder="https://github.com/yourusername">
                 </div>
                 <button type="submit" class="btn-primary">Save Profile</button>
             </form>

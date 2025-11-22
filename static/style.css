@@ -61,43 +61,82 @@ body {
 .user-profile {
     display: flex;
     align-items: center;
-    gap: 12px;
     position: relative;
 }
 
+.profile-container {
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+
 .profile-img {
-    width: 40px;
-    height: 40px;
+    width: 55px;
+    height: 55px;
     border-radius: 50%;
     object-fit: cover;
     cursor: pointer;
-    border: 2px solid var(--primary);
+    border: 3px solid var(--primary);
+    transition: all 0.2s;
+}
+
+.profile-img:hover {
+    border-color: var(--primary-dark);
+    box-shadow: 0 2px 8px rgba(29, 191, 115, 0.3);
 }
 
 .profile-dropdown {
-    display: flex;
-    flex-direction: column;
-    align-items: flex-end;
-    gap: 8px;
+    position: absolute;
+    top: 100%;
+    right: 0;
+    margin-top: 10px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    box-shadow: 0 4px 12px var(--shadow);
+    min-width: 180px;
+    opacity: 0;
+    visibility: hidden;
+    transform: translateY(-10px);
+    transition: all 0.2s ease;
+    z-index: 1000;
+    padding: 8px 0;
 }
 
-.profile-dropdown span {
+.profile-container:hover .profile-dropdown {
+    opacity: 1;
+    visibility: visible;
+    transform: translateY(0);
+}
+
+.dropdown-header {
+    padding: 8px 16px;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 4px;
+}
+
+.dropdown-header span {
     font-weight: 600;
     color: var(--text);
+    font-size: 0.95em;
 }
 
-.btn-link {
+.dropdown-item {
+    width: 100%;
     background: none;
     border: none;
-    color: var(--primary);
+    color: var(--text);
     cursor: pointer;
     font-size: 0.9em;
-    padding: 4px 0;
-    text-align: right;
+    padding: 10px 16px;
+    text-align: left;
+    transition: background-color 0.2s;
+    display: block;
 }
 
-.btn-link:hover {
-    text-decoration: underline;
+.dropdown-item:hover {
+    background: var(--bg-light);
+    color: var(--primary);
 }
 
 /* Sections */
@@ -317,16 +356,17 @@ body {
 
 .interest-match-badge {
     position: absolute;
-    top: 15px;
-    right: 15px;
+    top: 12px;
+    right: 12px;
     background: linear-gradient(135deg, var(--primary), var(--primary-dark));
     color: white;
-    padding: 6px 12px;
-    border-radius: 20px;
+    padding: 4px 10px;
+    border-radius: 4px;
     font-weight: 600;
-    font-size: 0.85em;
+    font-size: 0.75em;
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
     z-index: 10;
+    white-space: nowrap;
 }
 
 .user-card-header {
@@ -368,6 +408,44 @@ body {
     line-height: 1.5;
 }
 
+.social-links {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.social-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    border-radius: 4px;
+    text-decoration: none;
+    font-size: 0.85em;
+    font-weight: 500;
+    transition: all 0.2s;
+}
+
+.social-link.linkedin {
+    background: #0077b5;
+    color: white;
+}
+
+.social-link.linkedin:hover {
+    background: #005885;
+    transform: translateY(-1px);
+}
+
+.social-link.github {
+    background: #24292e;
+    color: white;
+}
+
+.social-link.github:hover {
+    background: #1a1e22;
+    transform: translateY(-1px);
+}
+
 .skills {
     display: flex;
     flex-wrap: wrap;
@@ -401,14 +479,29 @@ body {
 
 .match-score {
     position: absolute;
-    top: 15px;
-    right: 15px;
+    top: 12px;
+    right: 12px;
     background: var(--primary);
     color: white;
-    padding: 6px 12px;
-    border-radius: 20px;
+    padding: 4px 10px;
+    border-radius: 4px;
     font-weight: 600;
-    font-size: 0.9em;
+    font-size: 0.75em;
+    white-space: nowrap;
+}
+
+.interest-match-score {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    background: #667eea;
+    color: white;
+    padding: 4px 10px;
+    border-radius: 4px;
+    font-weight: 600;
+    font-size: 0.75em;
+    white-space: nowrap;
+    margin-top: 28px;
 }
 
 .match-card-header {

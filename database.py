@@ -50,6 +50,8 @@ class User(Base):
     location = Column(String, nullable=True)
     timezone = Column(String, nullable=True)
     availability = Column(String, nullable=True)  # e.g., "weekends", "evenings", "any"
+    linkedin_url = Column(String, nullable=True)
+    github_url = Column(String, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     is_active = Column(Boolean, default=True)
     
@@ -173,6 +175,22 @@ def migrate_db():
                 print("Added 'looking_for' column to users table")
             except Exception as e:
                 print(f"Could not add looking_for column: {e}")
+        
+        # Add linkedin_url column if it doesn't exist
+        if 'linkedin_url' not in existing_columns:
+            try:
+                conn.execute(text("ALTER TABLE users ADD COLUMN linkedin_url VARCHAR"))
+                print("Added 'linkedin_url' column to users table")
+            except Exception as e:
+                print(f"Could not add linkedin_url column: {e}")
+        
+        # Add github_url column if it doesn't exist
+        if 'github_url' not in existing_columns:
+            try:
+                conn.execute(text("ALTER TABLE users ADD COLUMN github_url VARCHAR"))
+                print("Added 'github_url' column to users table")
+            except Exception as e:
+                print(f"Could not add github_url column: {e}")
 
 
 def get_db():

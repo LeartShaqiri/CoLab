@@ -196,6 +196,8 @@ def get_users(
             "location": user.location,
             "timezone": user.timezone,
             "availability": user.availability,
+            "linkedin_url": user.linkedin_url,
+            "github_url": user.github_url,
             "skills": [{"id": s.id, "name": s.name, "category": s.category} for s in user.skills],
             "created_at": user.created_at
         }
@@ -231,8 +233,8 @@ def login(credentials: UserLogin, db: Session = Depends(get_db)):
         "full_name": user.full_name,
         "bio": user.bio,
         "profile_picture": user.profile_picture,
-        "interests": json.loads(user.interests) if user.interests else [],
-        "looking_for": json.loads(user.looking_for) if user.looking_for else [],
+        "interests": safe_json_loads(user.interests),
+        "looking_for": safe_json_loads(user.looking_for),
         "location": user.location,
         "timezone": user.timezone,
         "availability": user.availability,
@@ -257,8 +259,8 @@ def get_user(user_id: int, db: Session = Depends(get_db)):
         "full_name": user.full_name,
         "bio": user.bio,
         "profile_picture": user.profile_picture,
-        "interests": json.loads(user.interests) if user.interests else [],
-        "looking_for": json.loads(user.looking_for) if user.looking_for else [],
+        "interests": safe_json_loads(user.interests),
+        "looking_for": safe_json_loads(user.looking_for),
         "location": user.location,
         "timezone": user.timezone,
         "availability": user.availability,
@@ -292,6 +294,10 @@ def update_user(user_id: int, user_update: UserUpdate, db: Session = Depends(get
         user.timezone = user_update.timezone
     if user_update.availability is not None:
         user.availability = user_update.availability
+    if user_update.linkedin_url is not None:
+        user.linkedin_url = user_update.linkedin_url
+    if user_update.github_url is not None:
+        user.github_url = user_update.github_url
     
     # Update skills if provided
     if user_update.skill_names is not None:
@@ -315,8 +321,8 @@ def update_user(user_id: int, user_update: UserUpdate, db: Session = Depends(get
         "full_name": user.full_name,
         "bio": user.bio,
         "profile_picture": user.profile_picture,
-        "interests": json.loads(user.interests) if user.interests else [],
-        "looking_for": json.loads(user.looking_for) if user.looking_for else [],
+        "interests": safe_json_loads(user.interests),
+        "looking_for": safe_json_loads(user.looking_for),
         "location": user.location,
         "timezone": user.timezone,
         "availability": user.availability,
@@ -410,8 +416,12 @@ def find_matches(match_request: MatchRequest, db: Session = Depends(get_db)):
     )
     
     # Format response
+    from matching import get_interest_match_for_user
     match_details = []
     for candidate, score, details in matches:
+        # Calculate interest match
+        interest_match = get_interest_match_for_user(requester, candidate)
+        
         # Convert ORM object to dict with parsed JSON fields
         candidate_dict = {
             "id": candidate.id,
@@ -426,6 +436,7 @@ def find_matches(match_request: MatchRequest, db: Session = Depends(get_db)):
             "timezone": candidate.timezone,
             "availability": candidate.availability,
             "skills": [{"id": s.id, "name": s.name, "category": s.category} for s in candidate.skills],
+            "interest_match": interest_match,  # Add interest match percentage
             "created_at": candidate.created_at
         }
         match_details.append(MatchDetail(
