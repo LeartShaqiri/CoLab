@@ -28,6 +28,12 @@ window.addEventListener('DOMContentLoaded', () => {
     loadUsers();
 });
 
+// Helper function to get profile type emoji
+function getProfileTypeEmoji(profileType) {
+    if (!profileType) return '';
+    return profileType === 'Coworker' ? '🤝' : '💻';
+}
+
 // Check if user is logged in
 function checkAuth() {
     const userData = localStorage.getItem('currentUser');
@@ -41,11 +47,23 @@ function checkAuth() {
 function showUserProfile() {
     document.getElementById('headerActions').style.display = 'none';
     document.getElementById('userProfile').style.display = 'flex';
-    document.getElementById('profileName').textContent = currentUser.full_name;
+    const emoji = getProfileTypeEmoji(currentUser.profile_type);
+    document.getElementById('profileName').textContent = `${emoji} ${currentUser.full_name}`;
     if (currentUser.profile_picture) {
         document.getElementById('profileImg').src = currentUser.profile_picture;
     }
+    
+    // Display profile type badge
+    const badge = document.getElementById('profileTypeBadge');
+    if (currentUser.profile_type) {
+        badge.textContent = currentUser.profile_type === 'Coworker' ? '🤝' : '💻';
+        badge.style.display = 'flex';
+    } else {
+        badge.style.display = 'none';
+    }
+    
     document.getElementById('searchSection').style.display = 'block';
+    updateMessageBadge(); // Load message count
 }
 
 // Hide user profile
@@ -61,6 +79,7 @@ function hideUserProfile() {
 const loginModal = document.getElementById('loginModal');
 const signupModal = document.getElementById('signupModal');
 const profileModal = document.getElementById('profileModal');
+const userViewModal = document.getElementById('userViewModal');
 
 document.getElementById('loginBtn').addEventListener('click', () => {
     loginModal.style.display = 'block';
@@ -78,6 +97,369 @@ document.getElementById('logoutBtn').addEventListener('click', () => {
     hideUserProfile();
 });
 
+// Message button
+// Messaging functionality
+let currentConversationId = null;
+let currentChatUserId = null;
+
+// Global function for onclick handlers
+window.openMessagingModal = async function(userId, userName) {
+    if (!currentUser) {
+        alert('Please login to send messages');
+        return;
+    }
+    
+    currentChatUserId = userId;
+    const messagingModal = document.getElementById('messagingModal');
+    const greetingSelection = document.getElementById('greetingSelection');
+    const chatInterface = document.getElementById('chatInterface');
+    
+    // Check if conversation already exists
+    try {
+        const conversationsResponse = await fetch(`${API_BASE}/conversations/${currentUser.id}`);
+        if (conversationsResponse.ok) {
+            const conversations = await safeJsonParse(conversationsResponse);
+            const existingConv = conversations.find(c => 
+                c.other_user.id === userId
+            );
+            
+            if (existingConv) {
+                // Open existing conversation
+                currentConversationId = existingConv.id;
+                currentChatUserId = userId;
+                const chatInterface = document.getElementById('chatInterface');
+                document.getElementById('chatUserName').textContent = `${getProfileTypeEmoji(existingConv.other_user.profile_type)} ${userName}`;
+                greetingSelection.style.display = 'none';
+                chatInterface.style.display = 'block';
+                loadMessages(existingConv.id);
+                messagingModal.style.display = 'block';
+                return;
+            }
+        }
+    } catch (error) {
+        console.error('Error checking conversations:', error);
+    }
+    
+    // Show greeting selection for new conversation
+    greetingSelection.style.display = 'block';
+    chatInterface.style.display = 'none';
+    
+    // Load pre-written messages
+    try {
+        const response = await fetch(`${API_BASE}/messages/pre-written`);
+        if (response.ok) {
+            const data = await safeJsonParse(response);
+            const optionsContainer = document.getElementById('greetingOptions');
+            optionsContainer.innerHTML = data.messages.map((msg, index) => `
+                <button class="greeting-option" onclick="sendInitialMessage(${index}, '${msg.replace(/'/g, "\\'")}')" style="padding: 15px; text-align: left; border: 2px solid var(--border); border-radius: 8px; background: var(--bg); cursor: pointer; transition: all 0.2s;">
+                    ${msg}
+                </button>
+            `).join('');
+        }
+    } catch (error) {
+        console.error('Error loading pre-written messages:', error);
+    }
+    
+    messagingModal.style.display = 'block';
+}
+
+// Global function for onclick handlers
+window.sendInitialMessage = async function(index, message) {
+    if (!currentUser || !currentChatUserId) return;
+    
+    try {
+        const response = await fetch(`${API_BASE}/conversations?sender_id=${currentUser.id}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                other_user_id: parseInt(currentChatUserId),
+                initial_message: message
+            })
+        });
+        
+        if (response.ok) {
+            const conversation = await safeJsonParse(response);
+            currentConversationId = conversation.id;
+            
+            // Show success message and update badge
+            updateMessageBadge();
+            document.getElementById('greetingSelection').innerHTML = `
+                <div style="text-align: center; padding: 40px;">
+                    <div style="font-size: 3em; margin-bottom: 20px;">✅</div>
+                    <h3>Message Sent!</h3>
+                    <p style="color: var(--text-light);">Your message has been sent. Please wait for ${conversation.other_user.full_name} to reply.</p>
+                    <button class="btn-primary" onclick="document.getElementById('messagingModal').style.display='none'; showConversationsList()" style="margin-top: 20px;">View Conversations</button>
+                </div>
+            `;
+        } else {
+            const error = await safeJsonParse(response);
+            alert(error.detail || 'Failed to send message');
+        }
+    } catch (error) {
+        alert('Error sending message: ' + error.message);
+    }
+}
+
+async function loadMessages(conversationId) {
+    if (!currentUser) return;
+    
+    const container = document.getElementById('messagesContainer');
+    const inputContainer = document.getElementById('messageInputContainer');
+    container.innerHTML = '<div class="loading">Loading messages...</div>';
+    
+    try {
+        const response = await fetch(`${API_BASE}/conversations/${conversationId}/messages?user_id=${currentUser.id}`);
+        if (response.ok) {
+            const messages = await safeJsonParse(response);
+            
+            // Check if waiting for reply (only 1 message and it's an initial greeting from current user)
+            const canSend = !(messages.length === 1 && messages[0].is_initial_greeting && messages[0].sender_id === currentUser.id);
+            
+            if (!canSend) {
+                inputContainer.innerHTML = `
+                    <div style="width: 100%; padding: 15px; background: var(--bg-light); border-radius: 8px; text-align: center; color: var(--text-light);">
+                        ⏳ Waiting for reply... You can send messages once they respond.
+                    </div>
+                `;
+            } else {
+                inputContainer.innerHTML = `
+                    <div style="display: flex; gap: 10px; width: 100%;">
+                        <input type="text" id="messageInput" placeholder="Type your message..." style="flex: 1; padding: 12px; border: 1px solid var(--border); border-radius: 6px; font-size: 1em;">
+                        <button class="btn-primary" id="sendMessageBtn">Send</button>
+                    </div>
+                `;
+                // Re-attach event listeners
+                setTimeout(() => {
+                    const messageInput = document.getElementById('messageInput');
+                    const sendBtn = document.getElementById('sendMessageBtn');
+                    if (messageInput && sendBtn) {
+                        messageInput.addEventListener('keypress', (e) => {
+                            if (e.key === 'Enter') {
+                                sendMessageHandler();
+                            }
+                        });
+                        sendBtn.addEventListener('click', sendMessageHandler);
+                    }
+                }, 100);
+            }
+            
+            container.innerHTML = messages.map(msg => {
+                const isOwn = msg.sender_id === currentUser.id;
+                return `
+                    <div style="display: flex; justify-content: ${isOwn ? 'flex-end' : 'flex-start'};">
+                        <div style="max-width: 70%; padding: 12px 16px; background: ${isOwn ? 'var(--primary)' : 'var(--bg)'}; color: ${isOwn ? 'white' : 'var(--text)'}; border-radius: 12px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+                            <div style="font-size: 0.9em; margin-bottom: 4px;">${msg.content}</div>
+                            <div style="font-size: 0.75em; opacity: 0.7; text-align: right;">${new Date(msg.created_at).toLocaleTimeString()}</div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+            
+            container.scrollTop = container.scrollHeight;
+            
+            // Update badge after loading messages (in case unread count changed)
+            updateMessageBadge();
+        }
+    } catch (error) {
+        container.innerHTML = `<div class="alert error">Error loading messages: ${error.message}</div>`;
+    }
+}
+
+function sendMessageHandler() {
+    const input = document.getElementById('messageInput');
+    if (!input) return;
+    
+    const message = input.value.trim();
+    if (!message || !currentConversationId || !currentUser) return;
+    
+    sendMessageToConversation(message);
+}
+
+async function sendMessageToConversation(message) {
+    if (!currentConversationId || !currentUser) return;
+    
+    try {
+        const response = await fetch(`${API_BASE}/conversations/${currentConversationId}/messages?sender_id=${currentUser.id}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                content: message,
+                is_initial_greeting: false
+            })
+        });
+        
+        if (response.ok) {
+            const input = document.getElementById('messageInput');
+            if (input) input.value = '';
+            loadMessages(currentConversationId);
+            updateMessageBadge(); // Update badge after sending
+        } else {
+            const error = await safeJsonParse(response);
+            alert(error.detail || 'Failed to send message');
+        }
+    } catch (error) {
+        alert('Error sending message: ' + error.message);
+    }
+}
+
+document.getElementById('closeChatBtn').addEventListener('click', () => {
+    document.getElementById('messagingModal').style.display = 'none';
+    currentConversationId = null;
+    currentChatUserId = null;
+});
+
+// Update message badge with unread count
+async function updateMessageBadge() {
+    if (!currentUser) return;
+    
+    try {
+        const response = await fetch(`${API_BASE}/conversations/${currentUser.id}`);
+        if (response.ok) {
+            const conversations = await safeJsonParse(response);
+            const totalUnread = conversations.reduce((sum, conv) => sum + (conv.unread_count || 0), 0);
+            const badge = document.getElementById('messageBadge');
+            if (totalUnread > 0) {
+                badge.textContent = totalUnread > 99 ? '99+' : totalUnread;
+                badge.style.display = 'flex';
+            } else {
+                badge.style.display = 'none';
+            }
+        }
+    } catch (error) {
+        console.error('Error updating message badge:', error);
+    }
+}
+
+// Show conversations list
+async function showConversationsList() {
+    if (!currentUser) {
+        alert('Please login to view messages');
+        return;
+    }
+    
+    const messagingModal = document.getElementById('messagingModal');
+    const conversationsList = document.getElementById('conversationsList');
+    const greetingSelection = document.getElementById('greetingSelection');
+    const chatInterface = document.getElementById('chatInterface');
+    const container = document.getElementById('conversationsContainer');
+    
+    // Show conversations list, hide others
+    conversationsList.style.display = 'block';
+    greetingSelection.style.display = 'none';
+    chatInterface.style.display = 'none';
+    messagingModal.style.display = 'block';
+    
+    container.innerHTML = '<div class="loading">Loading conversations...</div>';
+    
+    try {
+        const response = await fetch(`${API_BASE}/conversations/${currentUser.id}`);
+        if (response.ok) {
+            const conversations = await safeJsonParse(response);
+            
+            if (conversations.length === 0) {
+                container.innerHTML = '<div class="empty-state"><h3>No messages yet</h3><p>Start a conversation by viewing a user profile and clicking "Send Message"</p></div>';
+                return;
+            }
+            
+            container.innerHTML = conversations.map(conv => {
+                const otherUser = conv.other_user;
+                const lastMsg = conv.last_message;
+                const initials = otherUser.full_name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
+                const avatar = otherUser.profile_picture || `data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%2240%22 height=%2240%22%3E%3Ccircle cx=%2220%22 cy=%2220%22 r=%2218%22 fill=%22%231dbf73%22/%3E%3Ctext x=%2220%22 y=%2225%22 font-size=%2214%22 fill=%22white%22 text-anchor=%22middle%22%3E${initials}%3C/text%3E%3C/svg%3E`;
+                const unreadBadge = conv.unread_count > 0 ? `<span class="conversation-unread">${conv.unread_count}</span>` : '';
+                const lastMsgPreview = lastMsg ? (lastMsg.content.length > 50 ? lastMsg.content.substring(0, 50) + '...' : lastMsg.content) : 'No messages yet';
+                const timeAgo = lastMsg ? getTimeAgo(new Date(lastMsg.created_at)) : '';
+                
+                return `
+                    <div class="conversation-item" onclick="openConversation(${conv.id}, ${otherUser.id}, '${otherUser.full_name.replace(/'/g, "\\'")}')" style="display: flex; align-items: center; gap: 12px; padding: 15px; border-bottom: 1px solid var(--border); cursor: pointer; transition: background 0.2s; position: relative;">
+                        <img src="${avatar}" alt="${otherUser.full_name}" style="width: 50px; height: 50px; border-radius: 50%; object-fit: cover; border: 2px solid var(--primary);" onerror="this.src='data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%2250%22 height=%2250%22%3E%3Ccircle cx=%2225%22 cy=%2225%22 r=%2223%22 fill=%22%231dbf73%22/%3E%3Ctext x=%2225%22 y=%2230%22 font-size=%2214%22 fill=%22white%22 text-anchor=%22middle%22%3E${initials}%3C/text%3E%3C/svg%3E'">
+                        <div style="flex: 1; min-width: 0;">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                                <h3 style="margin: 0; font-size: 1em; color: var(--text);">${getProfileTypeEmoji(otherUser.profile_type)} ${otherUser.full_name}</h3>
+                                ${timeAgo ? `<span style="font-size: 0.8em; color: var(--text-light);">${timeAgo}</span>` : ''}
+                            </div>
+                            <p style="margin: 0; font-size: 0.9em; color: var(--text-light); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${lastMsgPreview}</p>
+                        </div>
+                        ${unreadBadge}
+                    </div>
+                `;
+            }).join('');
+            
+            // Add hover effect
+            container.querySelectorAll('.conversation-item').forEach(item => {
+                item.addEventListener('mouseenter', function() {
+                    this.style.background = 'var(--bg-light)';
+                });
+                item.addEventListener('mouseleave', function() {
+                    this.style.background = 'transparent';
+                });
+            });
+        } else {
+            container.innerHTML = '<div class="alert error">Error loading conversations</div>';
+        }
+    } catch (error) {
+        container.innerHTML = `<div class="alert error">Error: ${error.message}</div>`;
+    }
+}
+
+// Helper function to get time ago
+function getTimeAgo(date) {
+    const now = new Date();
+    const diff = now - date;
+    const minutes = Math.floor(diff / 60000);
+    const hours = Math.floor(diff / 3600000);
+    const days = Math.floor(diff / 86400000);
+    
+    if (minutes < 1) return 'Just now';
+    if (minutes < 60) return `${minutes}m ago`;
+    if (hours < 24) return `${hours}h ago`;
+    if (days < 7) return `${days}d ago`;
+    return date.toLocaleDateString();
+}
+
+// Open conversation from list (global function for onclick)
+window.openConversation = async function(conversationId, userId, userName) {
+    currentConversationId = conversationId;
+    currentChatUserId = userId;
+    
+    const conversationsList = document.getElementById('conversationsList');
+    const chatInterface = document.getElementById('chatInterface');
+    const greetingSelection = document.getElementById('greetingSelection');
+    
+    conversationsList.style.display = 'none';
+    greetingSelection.style.display = 'none';
+    chatInterface.style.display = 'block';
+    
+    // Get user info for header
+    try {
+        const userResponse = await fetch(`${API_BASE}/users/${userId}`);
+        if (userResponse.ok) {
+            const user = await safeJsonParse(userResponse);
+            document.getElementById('chatUserName').textContent = `${getProfileTypeEmoji(user.profile_type)} ${user.full_name}`;
+        } else {
+            document.getElementById('chatUserName').textContent = userName;
+        }
+    } catch (error) {
+        document.getElementById('chatUserName').textContent = userName;
+    }
+    
+    loadMessages(conversationId);
+}
+
+document.getElementById('messagesBtn').addEventListener('click', showConversationsList);
+
+document.getElementById('backToConversationsBtn').addEventListener('click', () => {
+    showConversationsList();
+});
+
+// Periodically update message badge (every 30 seconds)
+setInterval(() => {
+    if (currentUser) {
+        updateMessageBadge();
+    }
+}, 30000);
+
+
 document.querySelectorAll('.close').forEach(closeBtn => {
     closeBtn.addEventListener('click', (e) => {
         e.target.closest('.modal').style.display = 'none';
@@ -89,6 +471,113 @@ window.addEventListener('click', (e) => {
         e.target.style.display = 'none';
     }
 });
+
+// View user profile (public - accessible to everyone)
+async function viewUserProfile(userId) {
+    const userViewContent = document.getElementById('userViewContent');
+    userViewModal.style.display = 'block';
+    userViewContent.innerHTML = '<div class="loading">Loading profile...</div>';
+    
+    try {
+        const response = await fetch(`${API_BASE}/users/${userId}`);
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        const user = await safeJsonParse(response);
+        
+        const initials = user.full_name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
+        const avatar = user.profile_picture || `data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%22100%22 height=%22100%22%3E%3Ccircle cx=%2250%22 cy=%2250%22 r=%2248%22 fill=%22%231dbf73%22/%3E%3Ctext x=%2250%22 y=%2260%22 font-size=%2232%22 fill=%22white%22 text-anchor=%22middle%22%3E${initials}%3C/text%3E%3C/svg%3E`;
+        
+        // Calculate match percentage if logged in
+        let matchInfo = '';
+        if (currentUser && currentUser.id !== user.id) {
+            const usersResponse = await fetch(`${API_BASE}/users?current_user_id=${currentUser.id}`);
+            if (usersResponse.ok) {
+                const allUsers = await safeJsonParse(usersResponse);
+                const matchedUser = allUsers.find(u => u.id === user.id);
+                if (matchedUser && matchedUser.interest_match !== undefined && matchedUser.interest_match !== null) {
+                    matchInfo = `<div class="interest-match-badge" style="margin-bottom: 20px; font-size: 1.1em; padding: 10px 20px;">${(matchedUser.interest_match * 100).toFixed(0)}% Interest Match</div>`;
+                }
+            }
+        }
+        
+        userViewContent.innerHTML = `
+            <div class="user-profile-view">
+                ${matchInfo}
+                <div class="profile-header" style="display: flex; align-items: center; gap: 20px; margin-bottom: 30px; padding-bottom: 20px; border-bottom: 2px solid var(--border);">
+                    <img src="${avatar}" alt="${user.full_name}" style="width: 120px; height: 120px; border-radius: 50%; object-fit: cover; border: 3px solid var(--primary-color);" onerror="this.src='data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%22120%22 height=%22120%22%3E%3Ccircle cx=%2260%22 cy=%2260%22 r=%2257%22 fill=%22%231dbf73%22/%3E%3Ctext x=%2260%22 y=%2270%22 font-size=%2240%22 fill=%22white%22 text-anchor=%22middle%22%3E${initials}%3C/text%3E%3C/svg%3E'">
+                    <div>
+                        <h2 style="margin: 0 0 5px 0; color: var(--text);">${getProfileTypeEmoji(user.profile_type)} ${user.full_name}</h2>
+                        <div style="font-size: 1.1em; color: var(--text-light); margin-bottom: 10px;">@${user.username}</div>
+                        ${user.location ? `<div style="color: var(--text-light); margin-top: 5px;">📍 ${user.location}</div>` : ''}
+                        ${user.availability ? `<div style="color: var(--text-light); margin-top: 5px;">⏰ ${user.availability}</div>` : ''}
+                    </div>
+                </div>
+                
+                ${user.bio ? `
+                    <div class="profile-section" style="margin-bottom: 25px;">
+                        <h3 style="margin-bottom: 10px; color: var(--text);">About</h3>
+                        <p style="line-height: 1.6; color: var(--text);">${user.bio}</p>
+                    </div>
+                ` : ''}
+                
+                ${user.interests && user.interests.length > 0 ? `
+                    <div class="profile-section" style="margin-bottom: 25px;">
+                        <h3 style="margin-bottom: 10px; color: var(--text);">Interests</h3>
+                        <div class="tags-container" style="display: flex; flex-wrap: wrap; gap: 8px; border: none; background: transparent; padding: 0; min-height: auto;">
+                            ${user.interests.map(i => `<span class="tag interest">${i}</span>`).join('')}
+                        </div>
+                    </div>
+                ` : ''}
+                
+                ${user.looking_for && user.looking_for.length > 0 ? `
+                    <div class="profile-section" style="margin-bottom: 25px;">
+                        <h3 style="margin-bottom: 10px; color: var(--text);">Looking For</h3>
+                        <div class="tags-container" style="display: flex; flex-wrap: wrap; gap: 8px; border: none; background: transparent; padding: 0; min-height: auto;">
+                            ${user.looking_for.map(l => `<span class="tag language">${l}</span>`).join('')}
+                        </div>
+                    </div>
+                ` : ''}
+                
+                ${user.skills && user.skills.length > 0 ? `
+                    <div class="profile-section" style="margin-bottom: 25px;">
+                        <h3 style="margin-bottom: 10px; color: var(--text);">Skills</h3>
+                        <div class="skills" style="display: flex; flex-wrap: wrap; gap: 8px;">
+                            ${user.skills.map(s => `<span class="skill-tag">${s.name}</span>`).join('')}
+                        </div>
+                    </div>
+                ` : ''}
+                
+                ${(user.linkedin_url || user.github_url) ? `
+                    <div class="profile-section" style="margin-bottom: 25px;">
+                        <h3 style="margin-bottom: 10px; color: var(--text);">Social Links</h3>
+                        <div class="social-links" style="display: flex; gap: 15px; flex-wrap: wrap;">
+                            ${user.linkedin_url ? `<a href="${user.linkedin_url}" target="_blank" rel="noopener noreferrer" class="social-link linkedin" style="padding: 10px 20px; background: #0077b5; color: white; text-decoration: none; border-radius: 5px; display: inline-flex; align-items: center; gap: 8px;">🔗 LinkedIn</a>` : ''}
+                            ${user.github_url ? `<a href="${user.github_url}" target="_blank" rel="noopener noreferrer" class="social-link github" style="padding: 10px 20px; background: #333; color: white; text-decoration: none; border-radius: 5px; display: inline-flex; align-items: center; gap: 8px;">💻 GitHub</a>` : ''}
+                        </div>
+                    </div>
+                ` : ''}
+                
+                ${user.timezone ? `
+                    <div class="profile-section" style="margin-bottom: 25px;">
+                        <h3 style="margin-bottom: 10px; color: var(--text);">Timezone</h3>
+                        <p style="color: var(--text);">${user.timezone}</p>
+                    </div>
+                ` : ''}
+                
+                ${currentUser && currentUser.id !== user.id ? `
+                    <div class="profile-section" style="margin-top: 30px; padding-top: 20px; border-top: 2px solid var(--border);">
+                        <button class="btn-primary" onclick="openMessagingModal(${user.id}, '${user.full_name.replace(/'/g, "\\'")}')" style="width: 100%; padding: 14px; font-size: 1.1em;">
+                            💬 Send Message
+                        </button>
+                    </div>
+                ` : ''}
+            </div>
+        `;
+    } catch (error) {
+        userViewContent.innerHTML = `<div class="alert error">Error loading profile: ${error.message}</div>`;
+    }
+}
 
 // Login
 document.getElementById('loginForm').addEventListener('submit', async (e) => {
@@ -195,6 +684,13 @@ function openProfileModal() {
     document.getElementById('profileLocation').value = currentUser.location || '';
     document.getElementById('profileLinkedIn').value = currentUser.linkedin_url || '';
     document.getElementById('profileGitHub').value = currentUser.github_url || '';
+    
+    // Set profile type radio button
+    if (currentUser.profile_type === 'Coworker') {
+        document.getElementById('profileTypeCoworker').checked = true;
+    } else if (currentUser.profile_type === 'SoloDev') {
+        document.getElementById('profileTypeSoloDev').checked = true;
+    }
     
     interests = currentUser.interests || [];
     languages = currentUser.looking_for || [];
@@ -326,6 +822,8 @@ document.getElementById('profileForm').addEventListener('submit', async (e) => {
     resultDiv.className = 'alert';
     resultDiv.textContent = '';
     
+    const profileType = document.querySelector('input[name="profileType"]:checked');
+    
     const updateData = {
         profile_picture: document.getElementById('profilePictureUrl').value || null,
         bio: document.getElementById('profileBio').value || null,
@@ -333,7 +831,8 @@ document.getElementById('profileForm').addEventListener('submit', async (e) => {
         looking_for: languages,
         location: document.getElementById('profileLocation').value || null,
         linkedin_url: document.getElementById('profileLinkedIn').value || null,
-        github_url: document.getElementById('profileGitHub').value || null
+        github_url: document.getElementById('profileGitHub').value || null,
+        profile_type: profileType ? profileType.value : null
     };
     
     try {
@@ -402,12 +901,12 @@ function loadUsers() {
                     : '';
                 
                 return `
-                    <div class="user-card">
+                    <div class="user-card" style="cursor: pointer;" data-user-id="${user.id}" onclick="viewUserProfile(${user.id})">
                         ${matchBadge}
                         <div class="user-card-header">
                             <img src="${avatar}" alt="${user.full_name}" class="user-avatar" onerror="this.src='data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%2250%22 height=%2250%22%3E%3Ccircle cx=%2225%22 cy=%2225%22 r=%2223%22 fill=%22%231dbf73%22/%3E%3Ctext x=%2225%22 y=%2230%22 font-size=%2216%22 fill=%22white%22 text-anchor=%22middle%22%3E${initials}%3C/text%3E%3C/svg%3E'">
                             <div class="user-info">
-                                <h3>${user.full_name}</h3>
+                                <h3>${getProfileTypeEmoji(user.profile_type)} ${user.full_name}</h3>
                                 <div class="username">@${user.username}</div>
                             </div>
                         </div>
@@ -426,8 +925,8 @@ function loadUsers() {
                         ` : ''}
                         ${(user.linkedin_url || user.github_url) ? `
                             <div class="social-links" style="margin-top: 12px; display: flex; gap: 10px;">
-                                ${user.linkedin_url ? `<a href="${user.linkedin_url}" target="_blank" rel="noopener noreferrer" class="social-link linkedin">🔗 LinkedIn</a>` : ''}
-                                ${user.github_url ? `<a href="${user.github_url}" target="_blank" rel="noopener noreferrer" class="social-link github">💻 GitHub</a>` : ''}
+                                ${user.linkedin_url ? `<a href="${user.linkedin_url}" target="_blank" rel="noopener noreferrer" class="social-link linkedin" onclick="event.stopPropagation()">🔗 LinkedIn</a>` : ''}
+                                ${user.github_url ? `<a href="${user.github_url}" target="_blank" rel="noopener noreferrer" class="social-link github" onclick="event.stopPropagation()">💻 GitHub</a>` : ''}
                             </div>
                         ` : ''}
                     </div>
@@ -489,7 +988,7 @@ document.getElementById('matchForm').addEventListener('submit', async (e) => {
                     : '';
                 
                 return `
-                    <div class="match-card">
+                    <div class="match-card" style="cursor: pointer;" onclick="viewUserProfile(${user.id})">
                         <div class="match-score">${(match.match_score * 100).toFixed(0)}% Skill Match</div>
                         ${interestMatch}
                         <div class="match-card-header">
@@ -504,8 +1003,8 @@ document.getElementById('matchForm').addEventListener('submit', async (e) => {
                         ${user.bio ? `<div class="bio">${user.bio}</div>` : ''}
                         ${(user.linkedin_url || user.github_url) ? `
                             <div class="social-links" style="margin-bottom: 15px; display: flex; gap: 10px;">
-                                ${user.linkedin_url ? `<a href="${user.linkedin_url}" target="_blank" rel="noopener noreferrer" class="social-link linkedin">🔗 LinkedIn</a>` : ''}
-                                ${user.github_url ? `<a href="${user.github_url}" target="_blank" rel="noopener noreferrer" class="social-link github">💻 GitHub</a>` : ''}
+                                ${user.linkedin_url ? `<a href="${user.linkedin_url}" target="_blank" rel="noopener noreferrer" class="social-link linkedin" onclick="event.stopPropagation()">🔗 LinkedIn</a>` : ''}
+                                ${user.github_url ? `<a href="${user.github_url}" target="_blank" rel="noopener noreferrer" class="social-link github" onclick="event.stopPropagation()">💻 GitHub</a>` : ''}
                             </div>
                         ` : ''}
                         <div class="match-details">

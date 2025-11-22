@@ -39,6 +39,7 @@ class UserUpdate(BaseModel):
     availability: Optional[str] = None
     linkedin_url: Optional[str] = None
     github_url: Optional[str] = None
+    profile_type: Optional[str] = None  # "Coworker" or "SoloDev"
     skill_names: Optional[List[str]] = None
 
 
@@ -66,6 +67,7 @@ class UserResponse(BaseModel):
     availability: Optional[str] = None
     linkedin_url: Optional[str] = None
     github_url: Optional[str] = None
+    profile_type: Optional[str] = None  # "Coworker" or "SoloDev"
     skills: List[SkillResponse] = []
     interest_match: Optional[float] = None  # Match percentage with current user
     created_at: datetime
@@ -169,4 +171,44 @@ class ConnectionResponse(BaseModel):
     created_at: datetime
 
     model_config = {"from_attributes": True}
+
+
+# Message Models
+class MessageCreate(BaseModel):
+    """Model for creating a new message."""
+    content: str
+    is_initial_greeting: bool = False
+
+
+class MessageResponse(BaseModel):
+    """Message response model."""
+    id: int
+    conversation_id: int
+    sender_id: int
+    content: str
+    is_initial_greeting: bool
+    read: bool
+    created_at: datetime
+    
+    model_config = {"from_attributes": True}
+
+
+class ConversationResponse(BaseModel):
+    """Conversation response model."""
+    id: int
+    user1_id: int
+    user2_id: int
+    created_at: datetime
+    updated_at: datetime
+    other_user: Optional[UserResponse] = None
+    last_message: Optional[MessageResponse] = None
+    unread_count: int = 0
+    
+    model_config = {"from_attributes": True}
+
+
+class ConversationCreate(BaseModel):
+    """Model for creating a conversation with initial message."""
+    other_user_id: int
+    initial_message: str  # One of the 3 pre-written messages
 

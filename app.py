@@ -11,14 +11,15 @@ from typing import List, Optional
 import os
 
 from database import (
-    init_db, get_db, User, Skill, Project, Match,
+    init_db, get_db, User, Skill, Project, Match, Conversation, Message,
     user_skills, project_skills
 )
 from models import (
     UserCreate, UserLogin, UserUpdate, UserResponse, SkillResponse,
     ProjectCreate, ProjectUpdate, ProjectResponse,
     MatchRequest, MatchResponse, MatchDetail,
-    ConnectionRequest, ConnectionResponse
+    ConnectionRequest, ConnectionResponse,
+    MessageCreate, MessageResponse, ConversationResponse, ConversationCreate
 )
 from matching import find_best_matches
 import hashlib
@@ -158,6 +159,9 @@ def create_user(user: UserCreate, db: Session = Depends(get_db)):
         "location": db_user.location,
         "timezone": db_user.timezone,
         "availability": db_user.availability,
+        "linkedin_url": db_user.linkedin_url,
+        "github_url": db_user.github_url,
+        "profile_type": db_user.profile_type,
         "skills": [{"id": s.id, "name": s.name, "category": s.category} for s in db_user.skills],
         "created_at": db_user.created_at
     }
@@ -198,6 +202,7 @@ def get_users(
             "availability": user.availability,
             "linkedin_url": user.linkedin_url,
             "github_url": user.github_url,
+            "profile_type": user.profile_type,
             "skills": [{"id": s.id, "name": s.name, "category": s.category} for s in user.skills],
             "created_at": user.created_at
         }
@@ -238,6 +243,9 @@ def login(credentials: UserLogin, db: Session = Depends(get_db)):
         "location": user.location,
         "timezone": user.timezone,
         "availability": user.availability,
+        "linkedin_url": user.linkedin_url,
+        "github_url": user.github_url,
+        "profile_type": user.profile_type,
         "skills": [{"id": s.id, "name": s.name, "category": s.category} for s in user.skills],
         "created_at": user.created_at
     }
@@ -246,7 +254,7 @@ def login(credentials: UserLogin, db: Session = Depends(get_db)):
 
 @app.get("/api/users/{user_id}", response_model=UserResponse)
 def get_user(user_id: int, db: Session = Depends(get_db)):
-    """Get a specific user by ID."""
+    """Get a specific user by ID. Public endpoint - accessible to everyone."""
     user = db.query(User).filter(User.id == user_id, User.is_active == True).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
@@ -264,6 +272,9 @@ def get_user(user_id: int, db: Session = Depends(get_db)):
         "location": user.location,
         "timezone": user.timezone,
         "availability": user.availability,
+        "linkedin_url": user.linkedin_url,
+        "github_url": user.github_url,
+        "profile_type": user.profile_type,
         "skills": [{"id": s.id, "name": s.name, "category": s.category} for s in user.skills],
         "created_at": user.created_at
     }
@@ -298,6 +309,8 @@ def update_user(user_id: int, user_update: UserUpdate, db: Session = Depends(get
         user.linkedin_url = user_update.linkedin_url
     if user_update.github_url is not None:
         user.github_url = user_update.github_url
+    if user_update.profile_type is not None:
+        user.profile_type = user_update.profile_type
     
     # Update skills if provided
     if user_update.skill_names is not None:
@@ -487,6 +500,221 @@ def get_connections(user_id: int, db: Session = Depends(get_db)):
         (Match.requester_id == user_id) | (Match.matched_user_id == user_id)
     ).all()
     return connections
+
+
+# ========== Messaging Endpoints ==========
+
+PRE_WRITTEN_MESSAGES = [
+    "Hi! I saw your profile and I'm interested in collaborating. Would you like to chat?",
+    "Hello! Your skills align perfectly with what I'm looking for. Let's connect!",
+    "Hey there! I think we could work well together. Want to discuss potential collaboration?"
+]
+
+@app.get("/api/messages/pre-written")
+def get_pre_written_messages():
+    """Get the 3 pre-written hello messages."""
+    return {"messages": PRE_WRITTEN_MESSAGES}
+
+
+@app.post("/api/conversations", response_model=ConversationResponse, status_code=status.HTTP_201_CREATED)
+def create_conversation(conversation: ConversationCreate, sender_id: int = Query(..., description="ID of the user sending the message"), db: Session = Depends(get_db)):
+    """Create a new conversation with an initial greeting message."""
+    sender = db.query(User).filter(User.id == sender_id).first()
+    other_user = db.query(User).filter(User.id == conversation.other_user_id).first()
+    
+    if not sender or not other_user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    if sender_id == conversation.other_user_id:
+        raise HTTPException(status_code=400, detail="Cannot message yourself")
+    
+    # Check if conversation already exists
+    existing = db.query(Conversation).filter(
+        ((Conversation.user1_id == sender_id) & (Conversation.user2_id == conversation.other_user_id)) |
+        ((Conversation.user1_id == conversation.other_user_id) & (Conversation.user2_id == sender_id))
+    ).first()
+    
+    if existing:
+        raise HTTPException(status_code=400, detail="Conversation already exists")
+    
+    # Create conversation
+    db_conversation = Conversation(
+        user1_id=min(sender_id, conversation.other_user_id),
+        user2_id=max(sender_id, conversation.other_user_id)
+    )
+    db.add(db_conversation)
+    db.flush()
+    
+    # Create initial message
+    db_message = Message(
+        conversation_id=db_conversation.id,
+        sender_id=sender_id,
+        content=conversation.initial_message,
+        is_initial_greeting=True
+    )
+    db.add(db_message)
+    db.commit()
+    db.refresh(db_conversation)
+    
+    # Get other user info
+    other_user_dict = {
+        "id": other_user.id,
+        "email": other_user.email,
+        "username": other_user.username,
+        "full_name": other_user.full_name,
+        "bio": other_user.bio,
+        "profile_picture": other_user.profile_picture,
+        "interests": safe_json_loads(other_user.interests),
+        "looking_for": safe_json_loads(other_user.looking_for),
+        "location": other_user.location,
+        "timezone": other_user.timezone,
+        "availability": other_user.availability,
+        "linkedin_url": other_user.linkedin_url,
+        "github_url": other_user.github_url,
+        "profile_type": other_user.profile_type,
+        "skills": [{"id": s.id, "name": s.name, "category": s.category} for s in other_user.skills],
+        "created_at": other_user.created_at
+    }
+    
+    return {
+        "id": db_conversation.id,
+        "user1_id": db_conversation.user1_id,
+        "user2_id": db_conversation.user2_id,
+        "created_at": db_conversation.created_at,
+        "updated_at": db_conversation.updated_at,
+        "other_user": other_user_dict,
+        "last_message": {
+            "id": db_message.id,
+            "conversation_id": db_message.conversation_id,
+            "sender_id": db_message.sender_id,
+            "content": db_message.content,
+            "is_initial_greeting": db_message.is_initial_greeting,
+            "read": db_message.read,
+            "created_at": db_message.created_at
+        },
+        "unread_count": 0
+    }
+
+
+@app.get("/api/conversations/{user_id}", response_model=List[ConversationResponse])
+def get_conversations(user_id: int, db: Session = Depends(get_db)):
+    """Get all conversations for a user."""
+    conversations = db.query(Conversation).filter(
+        (Conversation.user1_id == user_id) | (Conversation.user2_id == user_id)
+    ).order_by(Conversation.updated_at.desc()).all()
+    
+    result = []
+    for conv in conversations:
+        other_user_id = conv.user2_id if conv.user1_id == user_id else conv.user1_id
+        other_user = db.query(User).filter(User.id == other_user_id).first()
+        
+        # Get last message
+        last_message = db.query(Message).filter(Message.conversation_id == conv.id).order_by(Message.created_at.desc()).first()
+        
+        # Count unread messages
+        unread_count = db.query(Message).filter(
+            Message.conversation_id == conv.id,
+            Message.sender_id != user_id,
+            Message.read == False
+        ).count()
+        
+        other_user_dict = {
+            "id": other_user.id,
+            "email": other_user.email,
+            "username": other_user.username,
+            "full_name": other_user.full_name,
+            "bio": other_user.bio,
+            "profile_picture": other_user.profile_picture,
+            "interests": safe_json_loads(other_user.interests),
+            "looking_for": safe_json_loads(other_user.looking_for),
+            "location": other_user.location,
+            "timezone": other_user.timezone,
+            "availability": other_user.availability,
+            "linkedin_url": other_user.linkedin_url,
+            "github_url": other_user.github_url,
+            "profile_type": other_user.profile_type,
+            "skills": [{"id": s.id, "name": s.name, "category": s.category} for s in other_user.skills],
+            "created_at": other_user.created_at
+        }
+        
+        result.append({
+            "id": conv.id,
+            "user1_id": conv.user1_id,
+            "user2_id": conv.user2_id,
+            "created_at": conv.created_at,
+            "updated_at": conv.updated_at,
+            "other_user": other_user_dict,
+            "last_message": {
+                "id": last_message.id,
+                "conversation_id": last_message.conversation_id,
+                "sender_id": last_message.sender_id,
+                "content": last_message.content,
+                "is_initial_greeting": last_message.is_initial_greeting,
+                "read": last_message.read,
+                "created_at": last_message.created_at
+            } if last_message else None,
+            "unread_count": unread_count
+        })
+    
+    return result
+
+
+@app.get("/api/conversations/{conversation_id}/messages", response_model=List[MessageResponse])
+def get_messages(conversation_id: int, user_id: int = Query(..., description="ID of the user requesting messages"), db: Session = Depends(get_db)):
+    """Get all messages in a conversation."""
+    conversation = db.query(Conversation).filter(Conversation.id == conversation_id).first()
+    if not conversation:
+        raise HTTPException(status_code=404, detail="Conversation not found")
+    
+    if conversation.user1_id != user_id and conversation.user2_id != user_id:
+        raise HTTPException(status_code=403, detail="Not authorized to view this conversation")
+    
+    messages = db.query(Message).filter(Message.conversation_id == conversation_id).order_by(Message.created_at.asc()).all()
+    
+    # Mark messages as read
+    db.query(Message).filter(
+        Message.conversation_id == conversation_id,
+        Message.sender_id != user_id,
+        Message.read == False
+    ).update({"read": True})
+    db.commit()
+    
+    return messages
+
+
+@app.post("/api/conversations/{conversation_id}/messages", response_model=MessageResponse, status_code=status.HTTP_201_CREATED)
+def send_message(conversation_id: int, message: MessageCreate, sender_id: int = Query(..., description="ID of the user sending the message"), db: Session = Depends(get_db)):
+    """Send a message in a conversation."""
+    conversation = db.query(Conversation).filter(Conversation.id == conversation_id).first()
+    if not conversation:
+        raise HTTPException(status_code=404, detail="Conversation not found")
+    
+    if conversation.user1_id != sender_id and conversation.user2_id != sender_id:
+        raise HTTPException(status_code=403, detail="Not authorized to send messages in this conversation")
+    
+    # Check if this is the first message after initial greeting
+    existing_messages = db.query(Message).filter(Message.conversation_id == conversation_id).all()
+    if len(existing_messages) == 1:
+        first_message = existing_messages[0]
+        # If the first message is an initial greeting from the same sender, they must wait for a reply
+        if first_message.is_initial_greeting and first_message.sender_id == sender_id:
+            raise HTTPException(status_code=400, detail="Please wait for the other user to reply to your initial message")
+    
+    db_message = Message(
+        conversation_id=conversation_id,
+        sender_id=sender_id,
+        content=message.content,
+        is_initial_greeting=message.is_initial_greeting
+    )
+    db.add(db_message)
+    
+    # Update conversation timestamp
+    from datetime import datetime
+    conversation.updated_at = datetime.utcnow()
+    
+    db.commit()
+    db.refresh(db_message)
+    return db_message
 
 
 if __name__ == "__main__":

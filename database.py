@@ -52,6 +52,7 @@ class User(Base):
     availability = Column(String, nullable=True)  # e.g., "weekends", "evenings", "any"
     linkedin_url = Column(String, nullable=True)
     github_url = Column(String, nullable=True)
+    profile_type = Column(String, nullable=True)  # "Coworker" or "SoloDev"
     created_at = Column(DateTime, default=datetime.utcnow)
     is_active = Column(Boolean, default=True)
     
@@ -61,6 +62,8 @@ class User(Base):
     projects_member = relationship("Project", secondary=project_members, back_populates="members")
     matches_sent = relationship("Match", foreign_keys="Match.requester_id", back_populates="requester")
     matches_received = relationship("Match", foreign_keys="Match.matched_user_id", back_populates="matched_user")
+    conversations_as_user1 = relationship("Conversation", foreign_keys="Conversation.user1_id", back_populates="user1")
+    conversations_as_user2 = relationship("Conversation", foreign_keys="Conversation.user2_id", back_populates="user2")
 
 
 class Skill(Base):
@@ -111,6 +114,39 @@ class Match(Base):
     requester = relationship("User", foreign_keys=[requester_id], back_populates="matches_sent")
     matched_user = relationship("User", foreign_keys=[matched_user_id], back_populates="matches_received")
     project = relationship("Project")
+
+
+class Conversation(Base):
+    """Conversation model representing a chat between two users."""
+    __tablename__ = 'conversations'
+    
+    id = Column(Integer, primary_key=True, index=True)
+    user1_id = Column(Integer, ForeignKey('users.id'), nullable=False)
+    user2_id = Column(Integer, ForeignKey('users.id'), nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # Relationships
+    user1 = relationship("User", foreign_keys=[user1_id], back_populates="conversations_as_user1")
+    user2 = relationship("User", foreign_keys=[user2_id], back_populates="conversations_as_user2")
+    messages = relationship("Message", back_populates="conversation", cascade="all, delete-orphan")
+
+
+class Message(Base):
+    """Message model representing individual messages in a conversation."""
+    __tablename__ = 'messages'
+    
+    id = Column(Integer, primary_key=True, index=True)
+    conversation_id = Column(Integer, ForeignKey('conversations.id'), nullable=False)
+    sender_id = Column(Integer, ForeignKey('users.id'), nullable=False)
+    content = Column(Text, nullable=False)
+    is_initial_greeting = Column(Boolean, default=False)  # True for the first pre-written message
+    read = Column(Boolean, default=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    
+    # Relationships
+    conversation = relationship("Conversation", back_populates="messages")
+    sender = relationship("User", foreign_keys=[sender_id])
 
 
 # Database setup
@@ -177,6 +213,28 @@ def migrate_db():
                 print(f"Could not add looking_for column: {e}")
         
         # Add linkedin_url column if it doesn't exist
+        if 'linkedin_url' not in existing_columns:
+            try:
+                conn.execute(text("ALTER TABLE users ADD COLUMN linkedin_url VARCHAR"))
+                print("Added 'linkedin_url' column to users table")
+            except Exception as e:
+                print(f"Could not add linkedin_url column: {e}")
+        
+        # Add github_url column if it doesn't exist
+        if 'github_url' not in existing_columns:
+            try:
+                conn.execute(text("ALTER TABLE users ADD COLUMN github_url VARCHAR"))
+                print("Added 'github_url' column to users table")
+            except Exception as e:
+                print(f"Could not add github_url column: {e}")
+        
+        # Add profile_type column if it doesn't exist
+        if 'profile_type' not in existing_columns:
+            try:
+                conn.execute(text("ALTER TABLE users ADD COLUMN profile_type VARCHAR"))
+                print("Added 'profile_type' column to users table")
+            except Exception as e:
+                print(f"Could not add profile_type column: {e}")
         if 'linkedin_url' not in existing_columns:
             try:
                 conn.execute(text("ALTER TABLE users ADD COLUMN linkedin_url VARCHAR"))

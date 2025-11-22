@@ -58,32 +58,203 @@ body {
     gap: 10px;
 }
 
+
 .user-profile {
     display: flex;
     align-items: center;
     position: relative;
+    gap: 14px;
 }
 
+/* Container for avatar (allows effects behind image) */
 .profile-container {
     position: relative;
     display: flex;
     align-items: center;
+    justify-content: center;
+    padding: 3px;
+    border-radius: 50%;
+    background: linear-gradient(145deg, var(--primary), var(--primary-dark));
 }
 
+/* Avatar */
 .profile-img {
-    width: 55px;
-    height: 55px;
+    width: 62px;
+    height: 62px;
     border-radius: 50%;
     object-fit: cover;
     cursor: pointer;
-    border: 3px solid var(--primary);
-    transition: all 0.2s;
+    position: relative;
+    z-index: 1;
+    display: block;
+    
+    transition:
+        transform 0.35s cubic-bezier(0.34, 1.56, 0.64, 1),
+        box-shadow 0.35s ease,
+        filter 0.35s ease;
 }
 
+/* Hover effect: smooth glow + lift */
 .profile-img:hover {
-    border-color: var(--primary-dark);
-    box-shadow: 0 2px 8px rgba(29, 191, 115, 0.3);
+    transform: scale(1.08) translateY(-2px);
+
+    box-shadow: 
+        0 6px 18px rgba(29, 191, 115, 0.35),
+        0 0 10px rgba(29, 191, 115, 0.45);
+
+    filter: brightness(1.08) contrast(1.05);
 }
+
+/* Optional subtle glow ring on idle (premium touch) */
+.profile-container::before {
+    content: "";
+    position: absolute;
+    width: 72px;
+    height: 72px;
+    border-radius: 50%;
+
+    background: radial-gradient(
+        rgba(29,191,115,0.12),
+        rgba(29,191,115,0)
+    );
+
+    z-index: -1;
+    opacity: 0.4;
+
+    transition: 0.35s ease;
+}
+
+/* Hover the container = increase glow slightly */
+.profile-container:hover::before {
+    opacity: 0.75;
+    transform: scale(1.1);
+}
+
+/* Profile Type Badge */
+.profile-type-badge {
+    position: absolute;
+    bottom: -2px;
+    right: -2px;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background: linear-gradient(145deg, var(--primary), var(--primary-dark));
+    border: 3px solid var(--bg);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    box-shadow: 0 3px 10px rgba(29, 191, 115, 0.4);
+    z-index: 10;
+    transition: all 0.3s ease;
+}
+
+.profile-container:hover .profile-type-badge {
+    transform: scale(1.1);
+    box-shadow: 0 4px 14px rgba(29, 191, 115, 0.5);
+}
+/* Message Button (modern 2025 look) */
+.message-btn {
+    width: 62px;
+    height: 62px;
+    border-radius: 50%;
+    border: 2px solid rgba(255, 255, 255, 0.35);
+    background: rgba(255, 255, 255, 0.25);
+    backdrop-filter: blur(14px) saturate(180%);
+    
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    
+    cursor: pointer;
+    position: relative;
+
+    color: var(--text-light);
+
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.08);
+
+    transition:
+        transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1),
+        background 0.3s ease,
+        border-color 0.3s ease,
+        box-shadow 0.3s ease,
+        color 0.3s ease;
+}
+
+/* Hover */
+.message-btn:hover {
+    background: linear-gradient(145deg, var(--primary), var(--primary-dark));
+    border-color: rgba(255, 255, 255, 0.7);
+    color: #fff;
+
+    transform: translateY(-4px) scale(1.12);
+
+    box-shadow: 0 10px 26px rgba(29, 191, 115, 0.45);
+}
+
+/* Active click */
+.message-btn:active {
+    transform: scale(0.95);
+}
+
+/* Icon */
+.message-icon {
+    width: 26px;
+    height: 26px;
+    stroke-width: 2.6;
+
+    transition:
+        transform 0.35s cubic-bezier(0.34, 1.56, 0.64, 1),
+        filter 0.3s ease;
+}
+
+/* Icon hover animation */
+.message-btn:hover .message-icon {
+    transform: translateY(-1px) rotate(-12deg) scale(1.18);
+    filter: brightness(1.2);
+}
+
+/* Badge (improved) */
+.message-badge {
+    position: absolute;
+    top: -6px;
+    right: -6px;
+
+    background: linear-gradient(135deg, #ff4a57, #ff6a5c);
+    color: white;
+
+    font-size: 0.72em;
+    font-weight: 700;
+
+    min-width: 22px;
+    height: 22px;
+    padding: 0 8px;
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    border-radius: 12px;
+    border: 3px solid rgba(255, 255, 255, 0.85);
+
+    box-shadow: 0 4px 16px rgba(255, 71, 87, 0.65);
+
+    animation: badgePulse 1.6s ease-in-out infinite;
+    z-index: 12;
+}
+
+/* Softer, more premium pulse animation */
+@keyframes badgePulse {
+    0%, 100% {
+        transform: scale(1);
+        box-shadow: 0 4px 16px rgba(255, 71, 87, 0.55);
+    }
+    50% {
+        transform: scale(1.2);
+        box-shadow: 0 6px 22px rgba(255, 71, 87, 0.75);
+    }
+}
+
 
 .profile-dropdown {
     position: absolute;
@@ -585,6 +756,37 @@ body {
     max-width: 700px;
 }
 
+.greeting-option:hover {
+    border-color: var(--primary) !important;
+    background: var(--bg-light) !important;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+}
+
+/* Conversation List Styles */
+.conversation-item {
+    position: relative;
+}
+
+.conversation-item:hover {
+    background: var(--bg-light) !important;
+}
+
+.conversation-unread {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    background: linear-gradient(135deg, #ff4a57, #ff6a5c);
+    color: white;
+    font-size: 0.75em;
+    font-weight: 700;
+    padding: 4px 8px;
+    border-radius: 12px;
+    min-width: 20px;
+    text-align: center;
+    box-shadow: 0 2px 6px rgba(255, 71, 87, 0.4);
+}
+
 .close {
     color: var(--text-light);
     float: right;
@@ -677,5 +879,17 @@ body {
     
     .header-content {
         flex-wrap: wrap;
+        gap: 10px;
+    }
+    
+    .user-profile {
+        order: 3;
+        width: 100%;
+        justify-content: center;
+        margin-top: 10px;
+    }
+    
+    .header-actions {
+        order: 2;
     }
 }
