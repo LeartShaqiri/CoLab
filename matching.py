@@ -4,6 +4,7 @@ Finds users with skills that complement the requester's needs.
 """
 from typing import List, Dict, Set, Tuple, Optional
 from database import User, Skill
+import json
 
 
 def compute_complementary_match(
@@ -102,4 +103,68 @@ def find_best_matches(
     matches.sort(key=lambda x: x[1], reverse=True)
     
     return matches[:top_k]
+
+
+def calculate_interest_match(
+    user1_interests: List[str],
+    user2_interests: List[str]
+) -> float:
+    """
+    Calculate interest match percentage between two users.
+    
+    Returns:
+        Match percentage (0.0 to 1.0)
+    """
+    if not user1_interests or not user2_interests:
+        return 0.0
+    
+    # Normalize interests (remove # and lowercase for comparison)
+    interests1 = {i.lower().replace('#', '') for i in user1_interests if i}
+    interests2 = {i.lower().replace('#', '') for i in user2_interests if i}
+    
+    if not interests1 or not interests2:
+        return 0.0
+    
+    # Calculate Jaccard similarity (intersection over union)
+    intersection = len(interests1.intersection(interests2))
+    union = len(interests1.union(interests2))
+    
+    if union == 0:
+        return 0.0
+    
+    similarity = intersection / union
+    return round(similarity, 4)
+
+
+def get_interest_match_for_user(
+    current_user: User,
+    candidate: User
+) -> float:
+    """
+    Get interest match percentage between current user and candidate.
+    Handles JSON string parsing from database.
+    """
+    # Parse interests from database (could be JSON string or already parsed)
+    current_interests = []
+    candidate_interests = []
+    
+    if current_user.interests:
+        if isinstance(current_user.interests, str):
+            try:
+                current_interests = json.loads(current_user.interests)
+            except (json.JSONDecodeError, TypeError):
+                current_interests = []
+        else:
+            current_interests = current_user.interests
+    
+    if candidate.interests:
+        if isinstance(candidate.interests, str):
+            try:
+                candidate_interests = json.loads(candidate.interests)
+            except (json.JSONDecodeError, TypeError):
+                candidate_interests = []
+        else:
+            candidate_interests = candidate.interests
+    
+    return calculate_interest_match(current_interests, candidate_interests)
 

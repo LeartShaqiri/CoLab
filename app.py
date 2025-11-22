@@ -5,7 +5,7 @@ Connects people with complementary skills to collaborate.
 from fastapi import FastAPI, Depends, HTTPException, status, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import HTMLResponse, FileResponse
+from fastapi.responses import HTMLResponse, FileResponse, JSONResponse
 from sqlalchemy.orm import Session
 from typing import List, Optional
 import os
@@ -15,12 +15,23 @@ from database import (
     user_skills, project_skills
 )
 from models import (
-    UserCreate, UserUpdate, UserResponse, SkillResponse,
+    UserCreate, UserLogin, UserUpdate, UserResponse, SkillResponse,
     ProjectCreate, ProjectUpdate, ProjectResponse,
     MatchRequest, MatchResponse, MatchDetail,
     ConnectionRequest, ConnectionResponse
 )
 from matching import find_best_matches
+import hashlib
+import json
+
+def safe_json_loads(json_str):
+    """Safely parse JSON string, return empty list if invalid."""
+    if not json_str:
+        return []
+    try:
+        return json.loads(json_str)
+    except (json.JSONDecodeError, TypeError):
+        return []
 
 # Initialize FastAPI app
 app = FastAPI(
@@ -37,6 +48,18 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Global exception handler
+@app.exception_handler(Exception)
+async def global_exception_handler(request, exc):
+    """Handle all exceptions and return JSON responses."""
+    import traceback
+    print(f"Error: {exc}")
+    print(traceback.format_exc())
+    return JSONResponse(
+        status_code=500,
+        content={"detail": str(exc) if str(exc) else "Internal server error"}
+    )
 
 # Initialize database on startup
 @app.on_event("startup")
@@ -93,10 +116,14 @@ def create_user(user: UserCreate, db: Session = Depends(get_db)):
     if existing_username:
         raise HTTPException(status_code=400, detail="Username already taken")
     
+    # Hash password (simple hash for now)
+    password_hash = hashlib.sha256(user.password.encode()).hexdigest()
+    
     # Create user
     db_user = User(
         email=user.email,
         username=user.username,
+        password=password_hash,
         full_name=user.full_name,
         bio=user.bio,
         location=user.location,
@@ -117,14 +144,102 @@ def create_user(user: UserCreate, db: Session = Depends(get_db)):
     
     db.commit()
     db.refresh(db_user)
-    return db_user
+    
+    # Return user with parsed JSON fields
+    user_dict = {
+        "id": db_user.id,
+        "email": db_user.email,
+        "username": db_user.username,
+        "full_name": db_user.full_name,
+        "bio": db_user.bio,
+        "profile_picture": db_user.profile_picture,
+        "interests": safe_json_loads(db_user.interests),
+        "looking_for": safe_json_loads(db_user.looking_for),
+        "location": db_user.location,
+        "timezone": db_user.timezone,
+        "availability": db_user.availability,
+        "skills": [{"id": s.id, "name": s.name, "category": s.category} for s in db_user.skills],
+        "created_at": db_user.created_at
+    }
+    return user_dict
 
 
 @app.get("/api/users", response_model=List[UserResponse])
-def get_users(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
-    """Get all users."""
+def get_users(
+    skip: int = 0, 
+    limit: int = 100, 
+    current_user_id: Optional[int] = Query(None, description="ID of logged-in user to calculate match percentages"),
+    db: Session = Depends(get_db)
+):
+    """Get all users. If current_user_id is provided, includes interest match percentages."""
+    from matching import get_interest_match_for_user
+    
     users = db.query(User).filter(User.is_active == True).offset(skip).limit(limit).all()
-    return users
+    
+    # Get current user if provided
+    current_user = None
+    if current_user_id:
+        current_user = db.query(User).filter(User.id == current_user_id).first()
+    
+    # Parse JSON fields for each user
+    result = []
+    for user in users:
+        user_dict = {
+            "id": user.id,
+            "email": user.email,
+            "username": user.username,
+            "full_name": user.full_name,
+            "bio": user.bio,
+            "profile_picture": user.profile_picture,
+            "interests": safe_json_loads(user.interests),
+            "looking_for": safe_json_loads(user.looking_for),
+            "location": user.location,
+            "timezone": user.timezone,
+            "availability": user.availability,
+            "skills": [{"id": s.id, "name": s.name, "category": s.category} for s in user.skills],
+            "created_at": user.created_at
+        }
+        
+        # Calculate interest match if current user is provided and it's not the same user
+        if current_user and current_user.id != user.id:
+            match_percentage = get_interest_match_for_user(current_user, user)
+            user_dict["interest_match"] = match_percentage
+        
+        result.append(user_dict)
+    
+    return result
+
+
+@app.post("/api/auth/login", response_model=UserResponse)
+def login(credentials: UserLogin, db: Session = Depends(get_db)):
+    """Login user."""
+    password_hash = hashlib.sha256(credentials.password.encode()).hexdigest()
+    user = db.query(User).filter(
+        User.username == credentials.username,
+        User.password == password_hash,
+        User.is_active == True
+    ).first()
+    
+    if not user:
+        raise HTTPException(status_code=401, detail="Invalid username or password")
+    
+    # Parse JSON fields
+    user_dict = {
+        "id": user.id,
+        "email": user.email,
+        "username": user.username,
+        "full_name": user.full_name,
+        "bio": user.bio,
+        "profile_picture": user.profile_picture,
+        "interests": json.loads(user.interests) if user.interests else [],
+        "looking_for": json.loads(user.looking_for) if user.looking_for else [],
+        "location": user.location,
+        "timezone": user.timezone,
+        "availability": user.availability,
+        "skills": [{"id": s.id, "name": s.name, "category": s.category} for s in user.skills],
+        "created_at": user.created_at
+    }
+    return user_dict
 
 
 @app.get("/api/users/{user_id}", response_model=UserResponse)
@@ -133,7 +248,24 @@ def get_user(user_id: int, db: Session = Depends(get_db)):
     user = db.query(User).filter(User.id == user_id, User.is_active == True).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
-    return user
+    
+    # Parse JSON fields
+    user_dict = {
+        "id": user.id,
+        "email": user.email,
+        "username": user.username,
+        "full_name": user.full_name,
+        "bio": user.bio,
+        "profile_picture": user.profile_picture,
+        "interests": json.loads(user.interests) if user.interests else [],
+        "looking_for": json.loads(user.looking_for) if user.looking_for else [],
+        "location": user.location,
+        "timezone": user.timezone,
+        "availability": user.availability,
+        "skills": [{"id": s.id, "name": s.name, "category": s.category} for s in user.skills],
+        "created_at": user.created_at
+    }
+    return user_dict
 
 
 @app.put("/api/users/{user_id}", response_model=UserResponse)
@@ -148,6 +280,12 @@ def update_user(user_id: int, user_update: UserUpdate, db: Session = Depends(get
         user.full_name = user_update.full_name
     if user_update.bio is not None:
         user.bio = user_update.bio
+    if user_update.profile_picture is not None:
+        user.profile_picture = user_update.profile_picture
+    if user_update.interests is not None:
+        user.interests = json.dumps(user_update.interests)
+    if user_update.looking_for is not None:
+        user.looking_for = json.dumps(user_update.looking_for)
     if user_update.location is not None:
         user.location = user_update.location
     if user_update.timezone is not None:
@@ -168,7 +306,24 @@ def update_user(user_id: int, user_update: UserUpdate, db: Session = Depends(get
     
     db.commit()
     db.refresh(user)
-    return user
+    
+    # Return user with parsed JSON fields
+    user_dict = {
+        "id": user.id,
+        "email": user.email,
+        "username": user.username,
+        "full_name": user.full_name,
+        "bio": user.bio,
+        "profile_picture": user.profile_picture,
+        "interests": json.loads(user.interests) if user.interests else [],
+        "looking_for": json.loads(user.looking_for) if user.looking_for else [],
+        "location": user.location,
+        "timezone": user.timezone,
+        "availability": user.availability,
+        "skills": [{"id": s.id, "name": s.name, "category": s.category} for s in user.skills],
+        "created_at": user.created_at
+    }
+    return user_dict
 
 
 # ========== Skill Endpoints ==========
@@ -257,8 +412,24 @@ def find_matches(match_request: MatchRequest, db: Session = Depends(get_db)):
     # Format response
     match_details = []
     for candidate, score, details in matches:
+        # Convert ORM object to dict with parsed JSON fields
+        candidate_dict = {
+            "id": candidate.id,
+            "email": candidate.email,
+            "username": candidate.username,
+            "full_name": candidate.full_name,
+            "bio": candidate.bio,
+            "profile_picture": candidate.profile_picture,
+            "interests": safe_json_loads(candidate.interests),
+            "looking_for": safe_json_loads(candidate.looking_for),
+            "location": candidate.location,
+            "timezone": candidate.timezone,
+            "availability": candidate.availability,
+            "skills": [{"id": s.id, "name": s.name, "category": s.category} for s in candidate.skills],
+            "created_at": candidate.created_at
+        }
         match_details.append(MatchDetail(
-            matched_user=UserResponse.model_validate(candidate),
+            matched_user=UserResponse.model_validate(candidate_dict),
             match_score=score,
             complementary_skills=details.get("complementary_skills", []),
             shared_skills=details.get("shared_skills", []),

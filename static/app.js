@@ -1,39 +1,152 @@
 const API_BASE = '/api';
+let currentUser = null;
 
-// Tab switching
-document.querySelectorAll('.tab-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
-        const tabName = btn.dataset.tab;
-        
-        // Update buttons
-        document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-        btn.classList.add('active');
-        
-        // Update content
-        document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
-        document.getElementById(tabName).classList.add('active');
+// Helper function to safely parse JSON responses
+async function safeJsonParse(response) {
+    const contentType = response.headers.get('content-type');
+    if (contentType && contentType.includes('application/json')) {
+        try {
+            return await response.json();
+        } catch (e) {
+            const text = await response.text();
+            throw new Error(text || 'Invalid JSON response');
+        }
+    } else {
+        const text = await response.text();
+        try {
+            return JSON.parse(text);
+        } catch (e) {
+            throw new Error(text || 'Server error');
+        }
+    }
+}
+
+// Load users on page load
+window.addEventListener('DOMContentLoaded', () => {
+    loadUsers();
+    checkAuth();
+});
+
+// Check if user is logged in
+function checkAuth() {
+    const userData = localStorage.getItem('currentUser');
+    if (userData) {
+        currentUser = JSON.parse(userData);
+        showUserProfile();
+    }
+}
+
+// Show user profile in header
+function showUserProfile() {
+    document.getElementById('headerActions').style.display = 'none';
+    document.getElementById('userProfile').style.display = 'flex';
+    document.getElementById('profileName').textContent = currentUser.full_name;
+    if (currentUser.profile_picture) {
+        document.getElementById('profileImg').src = currentUser.profile_picture;
+    }
+    document.getElementById('searchSection').style.display = 'block';
+}
+
+// Hide user profile
+function hideUserProfile() {
+    document.getElementById('headerActions').style.display = 'flex';
+    document.getElementById('userProfile').style.display = 'none';
+    document.getElementById('searchSection').style.display = 'none';
+    currentUser = null;
+    localStorage.removeItem('currentUser');
+}
+
+// Modal handling
+const loginModal = document.getElementById('loginModal');
+const signupModal = document.getElementById('signupModal');
+const profileModal = document.getElementById('profileModal');
+
+document.getElementById('loginBtn').addEventListener('click', () => {
+    loginModal.style.display = 'block';
+});
+
+document.getElementById('signupBtn').addEventListener('click', () => {
+    signupModal.style.display = 'block';
+});
+
+document.getElementById('editProfileBtn').addEventListener('click', () => {
+    openProfileModal();
+});
+
+document.getElementById('logoutBtn').addEventListener('click', () => {
+    hideUserProfile();
+});
+
+document.querySelectorAll('.close').forEach(closeBtn => {
+    closeBtn.addEventListener('click', (e) => {
+        e.target.closest('.modal').style.display = 'none';
     });
 });
 
-// Register form
-document.getElementById('registerForm').addEventListener('submit', async (e) => {
+window.addEventListener('click', (e) => {
+    if (e.target.classList.contains('modal')) {
+        e.target.style.display = 'none';
+    }
+});
+
+// Login
+document.getElementById('loginForm').addEventListener('submit', async (e) => {
     e.preventDefault();
-    const resultDiv = document.getElementById('registerResult');
+    const resultDiv = document.getElementById('loginResult');
+    resultDiv.className = 'alert';
+    resultDiv.textContent = '';
     
-    const skills = document.getElementById('regSkills').value
-        .split(',')
-        .map(s => s.trim())
-        .filter(s => s);
+    const credentials = {
+        username: document.getElementById('loginUsername').value,
+        password: document.getElementById('loginPassword').value
+    };
+    
+    try {
+        const response = await fetch(`${API_BASE}/auth/login`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(credentials)
+        });
+        
+        if (response.ok) {
+            currentUser = await safeJsonParse(response);
+            localStorage.setItem('currentUser', JSON.stringify(currentUser));
+            resultDiv.className = 'alert success';
+            resultDiv.textContent = 'Login successful!';
+            setTimeout(() => {
+                loginModal.style.display = 'none';
+                showUserProfile();
+                document.getElementById('loginForm').reset();
+                loadUsers(); // Reload users to show match percentages
+            }, 1000);
+        } else {
+            try {
+                const error = await safeJsonParse(response);
+                resultDiv.className = 'alert error';
+                resultDiv.textContent = error.detail || 'Login failed';
+            } catch (e) {
+                resultDiv.className = 'alert error';
+                resultDiv.textContent = `Login failed: ${e.message}`;
+            }
+        }
+    } catch (error) {
+        resultDiv.className = 'alert error';
+        resultDiv.textContent = `Error: ${error.message}`;
+    }
+});
+
+// Signup
+document.getElementById('signupForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const resultDiv = document.getElementById('signupResult');
+    resultDiv.className = 'alert';
+    resultDiv.textContent = '';
     
     const userData = {
-        email: document.getElementById('regEmail').value,
-        username: document.getElementById('regUsername').value,
-        full_name: document.getElementById('regFullName').value,
-        bio: document.getElementById('regBio').value || null,
-        location: document.getElementById('regLocation').value || null,
-        timezone: document.getElementById('regTimezone').value || null,
-        availability: document.getElementById('regAvailability').value || null,
-        skill_names: skills
+        email: document.getElementById('signupEmail').value,
+        username: document.getElementById('signupUsername').value,
+        password: document.getElementById('signupPassword').value,
+        full_name: document.getElementById('signupFullName').value
     };
     
     try {
@@ -44,61 +157,289 @@ document.getElementById('registerForm').addEventListener('submit', async (e) => 
         });
         
         if (response.ok) {
-            const user = await response.json();
-            resultDiv.className = 'result success';
-            resultDiv.innerHTML = `
-                <strong>Success!</strong> User created with ID: ${user.id}<br>
-                <strong>Username:</strong> ${user.username}<br>
-                <strong>Email:</strong> ${user.email}
-            `;
-            document.getElementById('registerForm').reset();
+            const user = await safeJsonParse(response);
+            resultDiv.className = 'alert success';
+            resultDiv.textContent = 'Account created! Please login.';
+            setTimeout(() => {
+                signupModal.style.display = 'none';
+                loginModal.style.display = 'block';
+                document.getElementById('signupForm').reset();
+            }, 1500);
         } else {
-            const error = await response.json();
-            resultDiv.className = 'result error';
-            resultDiv.textContent = `Error: ${error.detail || 'Failed to create user'}`;
+            try {
+                const error = await safeJsonParse(response);
+                resultDiv.className = 'alert error';
+                resultDiv.textContent = error.detail || 'Signup failed';
+            } catch (e) {
+                resultDiv.className = 'alert error';
+                resultDiv.textContent = `Signup failed: ${e.message}`;
+            }
         }
     } catch (error) {
-        resultDiv.className = 'result error';
+        resultDiv.className = 'alert error';
+        resultDiv.textContent = `Error: ${error.message}`;
+    }
+});
+
+// Profile Management
+let interests = [];
+let languages = [];
+
+function openProfileModal() {
+    if (!currentUser) return;
+    
+    // Load current profile data
+    document.getElementById('profilePictureUrl').value = currentUser.profile_picture || '';
+    document.getElementById('profileBio').value = currentUser.bio || '';
+    document.getElementById('profileLocation').value = currentUser.location || '';
+    
+    interests = currentUser.interests || [];
+    languages = currentUser.looking_for || [];
+    
+    renderInterests();
+    renderLanguages();
+    updateProfilePreview();
+    
+    profileModal.style.display = 'block';
+}
+
+// Interests handling
+document.getElementById('interestInput').addEventListener('keypress', (e) => {
+    if (e.key === 'Enter') {
+        e.preventDefault();
+        const value = e.target.value.trim();
+        if (value && !value.startsWith('#')) {
+            addInterest('#' + value);
+        } else if (value) {
+            addInterest(value);
+        }
+        e.target.value = '';
+    }
+});
+
+function addInterest(tag) {
+    if (tag && !interests.includes(tag)) {
+        interests.push(tag);
+        renderInterests();
+    }
+}
+
+function removeInterest(tag) {
+    interests = interests.filter(t => t !== tag);
+    renderInterests();
+}
+
+
+function renderInterests() {
+    const container = document.getElementById('interestsContainer');
+    container.innerHTML = interests.map((tag, index) => `
+        <span class="tag interest" data-tag-index="${index}">
+            ${tag}
+            <span class="remove" data-action="remove-interest" data-index="${index}">×</span>
+        </span>
+    `).join('');
+    
+    // Add event listeners
+    container.querySelectorAll('[data-action="remove-interest"]').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            const index = parseInt(e.target.dataset.index);
+            interests.splice(index, 1);
+            renderInterests();
+        });
+    });
+}
+
+// Languages handling
+document.getElementById('addLanguageBtn').addEventListener('click', () => {
+    const input = document.getElementById('languageInput');
+    const value = input.value.trim().toLowerCase();
+    if (value) {
+        addLanguage('#' + value);
+        input.value = '';
+    }
+});
+
+document.getElementById('languageInput').addEventListener('keypress', (e) => {
+    if (e.key === 'Enter') {
+        e.preventDefault();
+        const value = e.target.value.trim().toLowerCase();
+        if (value) {
+            addLanguage('#' + value);
+            e.target.value = '';
+        }
+    }
+});
+
+function addLanguage(tag) {
+    if (tag && !languages.includes(tag)) {
+        languages.push(tag);
+        renderLanguages();
+    }
+}
+
+function removeLanguage(tag) {
+    languages = languages.filter(t => t !== tag);
+    renderLanguages();
+}
+
+function renderLanguages() {
+    const container = document.getElementById('languagesContainer');
+    container.innerHTML = languages.map((tag, index) => `
+        <span class="tag language" data-tag-index="${index}">
+            ${tag}
+            <span class="remove" data-action="remove-language" data-index="${index}">×</span>
+        </span>
+    `).join('');
+    
+    // Add event listeners
+    container.querySelectorAll('[data-action="remove-language"]').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            const index = parseInt(e.target.dataset.index);
+            languages.splice(index, 1);
+            renderLanguages();
+        });
+    });
+}
+
+// Profile picture preview
+document.getElementById('profilePictureUrl').addEventListener('input', updateProfilePreview);
+
+function updateProfilePreview() {
+    const url = document.getElementById('profilePictureUrl').value;
+    const preview = document.getElementById('profilePreview');
+    if (url) {
+        preview.innerHTML = `<img src="${url}" alt="Preview" onerror="this.style.display='none'">`;
+    } else {
+        preview.innerHTML = '';
+    }
+}
+
+// Save profile
+document.getElementById('profileForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    if (!currentUser) return;
+    
+    const resultDiv = document.getElementById('profileResult');
+    resultDiv.className = 'alert';
+    resultDiv.textContent = '';
+    
+    const updateData = {
+        profile_picture: document.getElementById('profilePictureUrl').value || null,
+        bio: document.getElementById('profileBio').value || null,
+        interests: interests,
+        looking_for: languages,
+        location: document.getElementById('profileLocation').value || null
+    };
+    
+    try {
+        const response = await fetch(`${API_BASE}/users/${currentUser.id}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(updateData)
+        });
+        
+        if (response.ok) {
+            const updated = await safeJsonParse(response);
+            currentUser = updated;
+            localStorage.setItem('currentUser', JSON.stringify(currentUser));
+            resultDiv.className = 'alert success';
+            resultDiv.textContent = 'Profile updated successfully!';
+            showUserProfile();
+            setTimeout(() => {
+                profileModal.style.display = 'none';
+            }, 1500);
+        } else {
+            try {
+                const error = await safeJsonParse(response);
+                resultDiv.className = 'alert error';
+                resultDiv.textContent = error.detail || 'Failed to update profile';
+            } catch (e) {
+                resultDiv.className = 'alert error';
+                resultDiv.textContent = `Failed to update profile: ${e.message}`;
+            }
+        }
+    } catch (error) {
+        resultDiv.className = 'alert error';
         resultDiv.textContent = `Error: ${error.message}`;
     }
 });
 
 // Load users
-document.getElementById('loadUsersBtn').addEventListener('click', async () => {
+function loadUsers() {
     const usersList = document.getElementById('usersList');
     usersList.innerHTML = '<div class="loading">Loading users...</div>';
     
-    try {
-        const response = await fetch(`${API_BASE}/users`);
-        const users = await response.json();
-        
-        if (users.length === 0) {
-            usersList.innerHTML = '<p>No users found. Register to get started!</p>';
-            return;
-        }
-        
-        usersList.innerHTML = users.map(user => `
-            <div class="user-card">
-                <h3>${user.full_name}</h3>
-                <div class="username">@${user.username}</div>
-                ${user.bio ? `<div class="bio">${user.bio}</div>` : ''}
-                ${user.location ? `<div><strong>Location:</strong> ${user.location}</div>` : ''}
-                ${user.availability ? `<div><strong>Available:</strong> ${user.availability}</div>` : ''}
-                <div class="skills">
-                    ${user.skills.map(skill => `<span class="skill-tag">${skill.name}</span>`).join('')}
-                </div>
-            </div>
-        `).join('');
-    } catch (error) {
-        usersList.innerHTML = `<div class="result error">Error: ${error.message}</div>`;
-    }
-});
+    // Include current user ID if logged in to get match percentages
+    const url = currentUser 
+        ? `${API_BASE}/users?current_user_id=${currentUser.id}`
+        : `${API_BASE}/users`;
+    
+    fetch(url)
+        .then(async res => {
+            if (!res.ok) {
+                throw new Error(`HTTP error! status: ${res.status}`);
+            }
+            return await safeJsonParse(res);
+        })
+        .then(users => {
+            if (users.length === 0) {
+                usersList.innerHTML = '<div class="empty-state"><h3>No users yet</h3><p>Be the first to sign up!</p></div>';
+                return;
+            }
+            
+            usersList.innerHTML = users.map(user => {
+                const initials = user.full_name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
+                const avatar = user.profile_picture || `data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%2250%22 height=%2250%22%3E%3Ccircle cx=%2225%22 cy=%2225%22 r=%2223%22 fill=%22%231dbf73%22/%3E%3Ctext x=%2225%22 y=%2230%22 font-size=%2216%22 fill=%22white%22 text-anchor=%22middle%22%3E${initials}%3C/text%3E%3C/svg%3E`;
+                
+                // Show match percentage if available
+                const matchBadge = user.interest_match !== undefined && user.interest_match !== null
+                    ? `<div class="interest-match-badge">${(user.interest_match * 100).toFixed(0)}% Match</div>`
+                    : '';
+                
+                return `
+                    <div class="user-card">
+                        ${matchBadge}
+                        <div class="user-card-header">
+                            <img src="${avatar}" alt="${user.full_name}" class="user-avatar" onerror="this.src='data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%2250%22 height=%2250%22%3E%3Ccircle cx=%2225%22 cy=%2225%22 r=%2223%22 fill=%22%231dbf73%22/%3E%3Ctext x=%2225%22 y=%2230%22 font-size=%2216%22 fill=%22white%22 text-anchor=%22middle%22%3E${initials}%3C/text%3E%3C/svg%3E'">
+                            <div class="user-info">
+                                <h3>${user.full_name}</h3>
+                                <div class="username">@${user.username}</div>
+                            </div>
+                        </div>
+                        ${user.location ? `<div class="location">📍 ${user.location}</div>` : ''}
+                        ${user.bio ? `<div class="bio">${user.bio}</div>` : ''}
+                        ${user.interests && user.interests.length > 0 ? `
+                            <div class="skills">
+                                ${user.interests.map(i => `<span class="skill-tag">${i}</span>`).join('')}
+                            </div>
+                        ` : ''}
+                        ${user.looking_for && user.looking_for.length > 0 ? `
+                            <div class="skills" style="margin-top: 8px;">
+                                <strong style="font-size: 0.85em; color: var(--text-light);">Looking for:</strong>
+                                ${user.looking_for.map(l => `<span class="skill-tag">${l}</span>`).join('')}
+                            </div>
+                        ` : ''}
+                    </div>
+                `;
+            }).join('');
+        })
+        .catch(error => {
+            usersList.innerHTML = `<div class="alert error">Error: ${error.message}</div>`;
+        });
+}
+
+document.getElementById('loadUsersBtn').addEventListener('click', loadUsers);
 
 // Find matches
 document.getElementById('matchForm').addEventListener('submit', async (e) => {
     e.preventDefault();
+    if (!currentUser) {
+        alert('Please login first');
+        return;
+    }
+    
     const matchesList = document.getElementById('matchesList');
-    matchesList.innerHTML = '<div class="loading">Finding matches...</div>';
+    matchesList.innerHTML = '<div class="loading">🔍 Finding your perfect matches...</div>';
     
     const skills = document.getElementById('matchSkills').value
         .split(',')
@@ -106,9 +447,9 @@ document.getElementById('matchForm').addEventListener('submit', async (e) => {
         .filter(s => s);
     
     const matchData = {
-        user_id: parseInt(document.getElementById('matchUserId').value),
+        user_id: currentUser.id,
         required_skill_names: skills.length > 0 ? skills : null,
-        top_k: parseInt(document.getElementById('matchTopK').value) || 10
+        top_k: 12
     };
     
     try {
@@ -119,136 +460,61 @@ document.getElementById('matchForm').addEventListener('submit', async (e) => {
         });
         
         if (response.ok) {
-            const result = await response.json();
+            const result = await safeJsonParse(response);
             
             if (result.matches.length === 0) {
-                matchesList.innerHTML = '<p>No matches found. Try adjusting your search criteria.</p>';
+                matchesList.innerHTML = '<div class="empty-state"><h3>No matches found</h3><p>Try adjusting your search criteria.</p></div>';
                 return;
             }
             
-            matchesList.innerHTML = result.matches.map(match => `
-                <div class="match-card">
-                    <div class="match-header">
-                        <h3>${match.matched_user.full_name} (@${match.matched_user.username})</h3>
-                        <div class="match-score">${(match.match_score * 100).toFixed(1)}% Match</div>
+            matchesList.innerHTML = result.matches.map(match => {
+                const user = match.matched_user;
+                const initials = user.full_name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
+                const avatar = user.profile_picture || `data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%2250%22 height=%2250%22%3E%3Ccircle cx=%2225%22 cy=%2225%22 r=%2223%22 fill=%22%231dbf73%22/%3E%3Ctext x=%2225%22 y=%2230%22 font-size=%2216%22 fill=%22white%22 text-anchor=%22middle%22%3E${initials}%3C/text%3E%3C/svg%3E`;
+                
+                return `
+                    <div class="match-card">
+                        <div class="match-score">${(match.match_score * 100).toFixed(0)}% Match</div>
+                        <div class="match-card-header">
+                            <div class="user-card-header">
+                                <img src="${avatar}" alt="${user.full_name}" class="user-avatar" onerror="this.src='data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%2250%22 height=%2250%22%3E%3Ccircle cx=%2225%22 cy=%2225%22 r=%2223%22 fill=%22%231dbf73%22/%3E%3Ctext x=%2225%22 y=%2230%22 font-size=%2216%22 fill=%22white%22 text-anchor=%22middle%22%3E${initials}%3C/text%3E%3C/svg%3E'">
+                                <div class="user-info">
+                                    <h3>${user.full_name}</h3>
+                                    <div class="username">@${user.username}</div>
+                                </div>
+                            </div>
+                        </div>
+                        ${user.bio ? `<div class="bio">${user.bio}</div>` : ''}
+                        <div class="match-details">
+                            ${match.complementary_skills.length > 0 ? `
+                                <div class="match-detail-row">
+                                    <strong>Adds Skills:</strong>
+                                    <div class="skills">
+                                        ${match.complementary_skills.map(s => `<span class="skill-tag">${s}</span>`).join('')}
+                                    </div>
+                                </div>
+                            ` : ''}
+                            ${match.shared_skills.length > 0 ? `
+                                <div class="match-detail-row">
+                                    <strong>Shared Skills:</strong>
+                                    <div class="skills">
+                                        ${match.shared_skills.map(s => `<span class="skill-tag shared">${s}</span>`).join('')}
+                                    </div>
+                                </div>
+                            ` : ''}
+                        </div>
                     </div>
-                    ${match.matched_user.bio ? `<p>${match.matched_user.bio}</p>` : ''}
-                    <div class="match-details">
-                        <div class="match-section">
-                            <h4>Complementary Skills</h4>
-                            <ul>
-                                ${match.complementary_skills.length > 0 
-                                    ? match.complementary_skills.map(s => `<li>✓ ${s}</li>`).join('')
-                                    : '<li>None</li>'}
-                            </ul>
-                        </div>
-                        <div class="match-section">
-                            <h4>Shared Skills</h4>
-                            <ul>
-                                ${match.shared_skills.length > 0 
-                                    ? match.shared_skills.map(s => `<li>• ${s}</li>`).join('')
-                                    : '<li>None</li>'}
-                            </ul>
-                        </div>
-                        ${match.missing_skills.length > 0 ? `
-                        <div class="match-section">
-                            <h4>Missing Skills</h4>
-                            <ul>
-                                ${match.missing_skills.map(s => `<li>✗ ${s}</li>`).join('')}
-                            </ul>
-                        </div>
-                        ` : ''}
-                    </div>
-                </div>
-            `).join('');
+                `;
+            }).join('');
         } else {
-            const error = await response.json();
-            matchesList.innerHTML = `<div class="result error">Error: ${error.detail || 'Failed to find matches'}</div>`;
+            try {
+                const error = await safeJsonParse(response);
+                matchesList.innerHTML = `<div class="alert error">Error: ${error.detail || 'Failed to find matches'}</div>`;
+            } catch (e) {
+                matchesList.innerHTML = `<div class="alert error">Error: ${e.message}</div>`;
+            }
         }
     } catch (error) {
-        matchesList.innerHTML = `<div class="result error">Error: ${error.message}</div>`;
+        matchesList.innerHTML = `<div class="alert error">Error: ${error.message}</div>`;
     }
 });
-
-// Load projects
-document.getElementById('loadProjectsBtn').addEventListener('click', async () => {
-    const projectsList = document.getElementById('projectsList');
-    projectsList.innerHTML = '<div class="loading">Loading projects...</div>';
-    
-    try {
-        const response = await fetch(`${API_BASE}/projects`);
-        const projects = await response.json();
-        
-        if (projects.length === 0) {
-            projectsList.innerHTML = '<p>No projects found. Create one to get started!</p>';
-            return;
-        }
-        
-        projectsList.innerHTML = projects.map(project => `
-            <div class="project-card">
-                <h3>${project.title}</h3>
-                ${project.description ? `<p>${project.description}</p>` : ''}
-                <div><strong>Status:</strong> ${project.status}</div>
-                <div><strong>Owner ID:</strong> ${project.owner_id}</div>
-                <div class="skills" style="margin-top: 10px;">
-                    ${project.required_skills.map(skill => `<span class="skill-tag">${skill.name}</span>`).join('')}
-                </div>
-            </div>
-        `).join('');
-    } catch (error) {
-        projectsList.innerHTML = `<div class="result error">Error: ${error.message}</div>`;
-    }
-});
-
-// Toggle create project form
-document.getElementById('createProjectBtn').addEventListener('click', () => {
-    const form = document.getElementById('createProjectForm');
-    form.classList.toggle('hidden');
-});
-
-// Create project
-document.getElementById('submitProjectBtn').addEventListener('click', async () => {
-    const resultDiv = document.getElementById('projectsList');
-    resultDiv.innerHTML = '<div class="loading">Creating project...</div>';
-    
-    const skills = document.getElementById('projectSkills').value
-        .split(',')
-        .map(s => s.trim())
-        .filter(s => s);
-    
-    const projectData = {
-        title: document.getElementById('projectTitle').value,
-        description: document.getElementById('projectDescription').value || null,
-        required_skill_names: skills
-    };
-    
-    const ownerId = parseInt(document.getElementById('projectOwnerId').value);
-    
-    try {
-        const response = await fetch(`${API_BASE}/projects?owner_id=${ownerId}`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(projectData)
-        });
-        
-        if (response.ok) {
-            const project = await response.json();
-            resultDiv.innerHTML = `
-                <div class="result success">
-                    <strong>Success!</strong> Project created with ID: ${project.id}<br>
-                    <strong>Title:</strong> ${project.title}
-                </div>
-            `;
-            document.getElementById('createProjectForm').classList.add('hidden');
-            document.getElementById('projectTitle').value = '';
-            document.getElementById('projectDescription').value = '';
-            document.getElementById('projectSkills').value = '';
-        } else {
-            const error = await response.json();
-            resultDiv.innerHTML = `<div class="result error">Error: ${error.detail || 'Failed to create project'}</div>`;
-        }
-    } catch (error) {
-        resultDiv.innerHTML = `<div class="result error">Error: ${error.message}</div>`;
-    }
-});
-

@@ -41,8 +41,12 @@ class User(Base):
     id = Column(Integer, primary_key=True, index=True)
     email = Column(String, unique=True, index=True, nullable=False)
     username = Column(String, unique=True, index=True, nullable=False)
+    password = Column(String, nullable=True)  # Simple password for now
     full_name = Column(String, nullable=False)
     bio = Column(Text, nullable=True)
+    profile_picture = Column(String, nullable=True)  # URL or base64
+    interests = Column(Text, nullable=True)  # JSON array of interests with #
+    looking_for = Column(Text, nullable=True)  # JSON array of programming languages with #
     location = Column(String, nullable=True)
     timezone = Column(String, nullable=True)
     availability = Column(String, nullable=True)  # e.g., "weekends", "evenings", "any"
@@ -121,6 +125,54 @@ SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 def init_db():
     """Initialize the database by creating all tables."""
     Base.metadata.create_all(bind=engine)
+    migrate_db()
+
+
+def migrate_db():
+    """Add missing columns to existing database tables."""
+    from sqlalchemy import inspect, text
+    
+    inspector = inspect(engine)
+    table_names = inspector.get_table_names()
+    
+    # Only migrate if users table exists
+    if 'users' not in table_names:
+        return
+    
+    existing_columns = [col['name'] for col in inspector.get_columns('users')]
+    
+    with engine.begin() as conn:  # Use begin() for automatic transaction handling
+        # Add password column if it doesn't exist
+        if 'password' not in existing_columns:
+            try:
+                conn.execute(text("ALTER TABLE users ADD COLUMN password VARCHAR"))
+                print("Added 'password' column to users table")
+            except Exception as e:
+                print(f"Could not add password column: {e}")
+        
+        # Add profile_picture column if it doesn't exist
+        if 'profile_picture' not in existing_columns:
+            try:
+                conn.execute(text("ALTER TABLE users ADD COLUMN profile_picture VARCHAR"))
+                print("Added 'profile_picture' column to users table")
+            except Exception as e:
+                print(f"Could not add profile_picture column: {e}")
+        
+        # Add interests column if it doesn't exist
+        if 'interests' not in existing_columns:
+            try:
+                conn.execute(text("ALTER TABLE users ADD COLUMN interests TEXT"))
+                print("Added 'interests' column to users table")
+            except Exception as e:
+                print(f"Could not add interests column: {e}")
+        
+        # Add looking_for column if it doesn't exist
+        if 'looking_for' not in existing_columns:
+            try:
+                conn.execute(text("ALTER TABLE users ADD COLUMN looking_for TEXT"))
+                print("Added 'looking_for' column to users table")
+            except Exception as e:
+                print(f"Could not add looking_for column: {e}")
 
 
 def get_db():

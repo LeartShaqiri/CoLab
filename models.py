@@ -1,9 +1,10 @@
 """
 Pydantic models for API request/response validation.
 """
-from pydantic import BaseModel, EmailStr, Field
-from typing import List, Optional, Dict, Any
+from pydantic import BaseModel, EmailStr, Field, field_validator, model_validator
+from typing import List, Optional, Dict, Any, Union
 from datetime import datetime
+import json
 
 
 # User Models
@@ -11,6 +12,7 @@ class UserCreate(BaseModel):
     """Model for creating a new user."""
     email: EmailStr
     username: str = Field(..., min_length=3, max_length=50)
+    password: str = Field(..., min_length=6)
     full_name: str = Field(..., min_length=1, max_length=100)
     bio: Optional[str] = None
     location: Optional[str] = None
@@ -19,10 +21,19 @@ class UserCreate(BaseModel):
     skill_names: List[str] = []  # List of skill names to associate
 
 
+class UserLogin(BaseModel):
+    """Model for user login."""
+    username: str
+    password: str
+
+
 class UserUpdate(BaseModel):
     """Model for updating user profile."""
     full_name: Optional[str] = None
     bio: Optional[str] = None
+    profile_picture: Optional[str] = None
+    interests: Optional[List[str]] = None  # List of interest tags with #
+    looking_for: Optional[List[str]] = None  # List of programming languages with #
     location: Optional[str] = None
     timezone: Optional[str] = None
     availability: Optional[str] = None
@@ -45,13 +56,37 @@ class UserResponse(BaseModel):
     username: str
     full_name: str
     bio: Optional[str] = None
+    profile_picture: Optional[str] = None
+    interests: Optional[List[str]] = None
+    looking_for: Optional[List[str]] = None
     location: Optional[str] = None
     timezone: Optional[str] = None
     availability: Optional[str] = None
     skills: List[SkillResponse] = []
+    interest_match: Optional[float] = None  # Match percentage with current user
     created_at: datetime
 
     model_config = {"from_attributes": True}
+    
+    @field_validator('interests', 'looking_for', mode='before')
+    @classmethod
+    def parse_json_string(cls, v: Union[str, List[str], None]) -> Optional[List[str]]:
+        """Parse JSON string to list if needed."""
+        if v is None:
+            return None
+        if isinstance(v, list):
+            return v
+        if isinstance(v, str):
+            if not v.strip():
+                return None
+            try:
+                parsed = json.loads(v)
+                if isinstance(parsed, list):
+                    return parsed
+                return None
+            except (json.JSONDecodeError, TypeError):
+                return None
+        return None
 
 
 # Project Models

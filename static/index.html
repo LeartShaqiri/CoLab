@@ -3,130 +3,134 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>CoLab - Connect & Collaborate</title>
+    <title>CoLab - Find Your Perfect Collaboration Partner</title>
     <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
-    <div class="container">
-        <header>
-            <h1>🤝 CoLab</h1>
-            <p class="subtitle">Connect with people who have complementary skills</p>
-        </header>
+    <!-- Header -->
+    <header class="main-header">
+        <div class="container">
+            <div class="header-content">
+                <h1 class="logo">CoLab</h1>
+                <div class="header-actions" id="headerActions">
+                    <button class="btn-secondary" id="loginBtn">Login</button>
+                    <button class="btn-primary" id="signupBtn">Sign Up</button>
+                </div>
+                <div class="user-profile" id="userProfile" style="display: none;">
+                    <div class="profile-dropdown">
+                        <img src="" alt="Profile" class="profile-img" id="profileImg" onerror="this.src='data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%2240%22 height=%2240%22%3E%3Ccircle cx=%2220%22 cy=%2220%22 r=%2218%22 fill=%22%231dbf73%22/%3E%3Ctext x=%2220%22 y=%2225%22 font-size=%2214%22 fill=%22white%22 text-anchor=%22middle%22%3E?%3C/text%3E%3C/svg%3E'">
+                        <span id="profileName"></span>
+                        <button class="btn-link" id="editProfileBtn">Edit Profile</button>
+                        <button class="btn-link" id="logoutBtn">Logout</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </header>
 
-        <nav class="tabs">
-            <button class="tab-btn active" data-tab="register">Register</button>
-            <button class="tab-btn" data-tab="browse">Browse Users</button>
-            <button class="tab-btn" data-tab="match">Find Matches</button>
-            <button class="tab-btn" data-tab="projects">Projects</button>
-        </nav>
+    <main class="container">
+        <!-- Browse Users Section (Main Page) -->
+        <section class="section browse-section">
+            <div class="section-header">
+                <h2>Discover Collaborators</h2>
+                <button id="loadUsersBtn" class="btn-secondary">Refresh</button>
+            </div>
+            <div id="usersList" class="cards-grid"></div>
+        </section>
 
-        <!-- Register Tab -->
-        <div id="register" class="tab-content active">
-            <h2>Create Your Profile</h2>
-            <form id="registerForm" class="form">
+        <!-- Find Matches Section -->
+        <section class="section search-section" id="searchSection" style="display: none;">
+            <h2>Find Your Match</h2>
+            <form id="matchForm" class="form-inline">
+                <input type="text" id="matchSkills" placeholder="Required Skills (optional)">
+                <button type="submit" class="btn-primary">Find Matches</button>
+            </form>
+            <div id="matchesList" class="cards-grid"></div>
+        </section>
+    </main>
+
+    <!-- Login Modal -->
+    <div id="loginModal" class="modal">
+        <div class="modal-content">
+            <span class="close">&times;</span>
+            <h2>Login</h2>
+            <form id="loginForm">
                 <div class="form-group">
-                    <label>Email *</label>
-                    <input type="email" id="regEmail" required>
+                    <input type="text" id="loginUsername" placeholder="Username" required>
                 </div>
                 <div class="form-group">
-                    <label>Username *</label>
-                    <input type="text" id="regUsername" required minlength="3">
+                    <input type="password" id="loginPassword" placeholder="Password" required>
+                </div>
+                <button type="submit" class="btn-primary">Login</button>
+            </form>
+            <div id="loginResult" class="alert"></div>
+        </div>
+    </div>
+
+    <!-- Signup Modal -->
+    <div id="signupModal" class="modal">
+        <div class="modal-content">
+            <span class="close">&times;</span>
+            <h2>Sign Up</h2>
+            <form id="signupForm">
+                <div class="form-group">
+                    <input type="email" id="signupEmail" placeholder="Email" required>
                 </div>
                 <div class="form-group">
-                    <label>Full Name *</label>
-                    <input type="text" id="regFullName" required>
+                    <input type="text" id="signupUsername" placeholder="Username" required>
+                </div>
+                <div class="form-group">
+                    <input type="password" id="signupPassword" placeholder="Password (min 6 chars)" required minlength="6">
+                </div>
+                <div class="form-group">
+                    <input type="text" id="signupFullName" placeholder="Full Name" required>
+                </div>
+                <button type="submit" class="btn-primary">Create Account</button>
+            </form>
+            <div id="signupResult" class="alert"></div>
+        </div>
+    </div>
+
+    <!-- Profile Modal -->
+    <div id="profileModal" class="modal">
+        <div class="modal-content large">
+            <span class="close">&times;</span>
+            <h2>Edit Profile</h2>
+            <form id="profileForm">
+                <div class="form-group">
+                    <label>Profile Picture URL</label>
+                    <input type="url" id="profilePictureUrl" placeholder="https://example.com/image.jpg">
+                    <div class="preview-img" id="profilePreview"></div>
                 </div>
                 <div class="form-group">
                     <label>Bio</label>
-                    <textarea id="regBio" rows="3"></textarea>
+                    <textarea id="profileBio" rows="4" placeholder="Tell us about yourself..."></textarea>
+                </div>
+                <div class="form-group">
+                    <label>Interests</label>
+                    <input type="text" id="interestInput" placeholder="Type interests like #webdev, #frontend, #backend">
+                    <div class="tags-container" id="interestsContainer"></div>
+                    <small>Type interests with # prefix (e.g., #webdev, #frontend)</small>
+                </div>
+                <div class="form-group">
+                    <label>Looking For (Programming Languages)</label>
+                    <div class="add-tag-input">
+                        <button type="button" class="btn-add" id="addLanguageBtn">+</button>
+                        <input type="text" id="languageInput" placeholder="Type language (e.g., python, java)">
+                    </div>
+                    <div class="tags-container" id="languagesContainer"></div>
+                    <small>Languages will automatically have # prefix</small>
                 </div>
                 <div class="form-group">
                     <label>Location</label>
-                    <input type="text" id="regLocation">
+                    <input type="text" id="profileLocation" placeholder="City, Country">
                 </div>
-                <div class="form-group">
-                    <label>Timezone</label>
-                    <input type="text" id="regTimezone" placeholder="e.g., EST, PST, UTC">
-                </div>
-                <div class="form-group">
-                    <label>Availability</label>
-                    <select id="regAvailability">
-                        <option value="">Select...</option>
-                        <option value="any">Any time</option>
-                        <option value="weekdays">Weekdays</option>
-                        <option value="evenings">Evenings</option>
-                        <option value="weekends">Weekends</option>
-                    </select>
-                </div>
-                <div class="form-group">
-                    <label>Your Skills (comma-separated)</label>
-                    <input type="text" id="regSkills" placeholder="e.g., Python, React, UI/UX Design">
-                </div>
-                <button type="submit" class="btn btn-primary">Create Profile</button>
+                <button type="submit" class="btn-primary">Save Profile</button>
             </form>
-            <div id="registerResult" class="result"></div>
-        </div>
-
-        <!-- Browse Users Tab -->
-        <div id="browse" class="tab-content">
-            <h2>Browse All Users</h2>
-            <button id="loadUsersBtn" class="btn btn-primary">Load Users</button>
-            <div id="usersList" class="users-grid"></div>
-        </div>
-
-        <!-- Match Tab -->
-        <div id="match" class="tab-content">
-            <h2>Find Your Perfect Match</h2>
-            <form id="matchForm" class="form">
-                <div class="form-group">
-                    <label>Your User ID *</label>
-                    <input type="number" id="matchUserId" required>
-                </div>
-                <div class="form-group">
-                    <label>Required Skills (comma-separated, optional)</label>
-                    <input type="text" id="matchSkills" placeholder="e.g., Python, Machine Learning">
-                </div>
-                <div class="form-group">
-                    <label>Number of Matches</label>
-                    <input type="number" id="matchTopK" value="10" min="1" max="50">
-                </div>
-                <button type="submit" class="btn btn-primary">Find Matches</button>
-            </form>
-            <div id="matchesList" class="matches-list"></div>
-        </div>
-
-        <!-- Projects Tab -->
-        <div id="projects" class="tab-content">
-            <h2>Projects</h2>
-            <div class="project-actions">
-                <button id="loadProjectsBtn" class="btn btn-primary">Load Projects</button>
-                <button id="createProjectBtn" class="btn btn-secondary">Create Project</button>
-            </div>
-            <div id="createProjectForm" class="form hidden">
-                <h3>Create New Project</h3>
-                <div class="form-group">
-                    <label>Project Title *</label>
-                    <input type="text" id="projectTitle" required>
-                </div>
-                <div class="form-group">
-                    <label>Description</label>
-                    <textarea id="projectDescription" rows="3"></textarea>
-                </div>
-                <div class="form-group">
-                    <label>Required Skills (comma-separated)</label>
-                    <input type="text" id="projectSkills" placeholder="e.g., React, Node.js, MongoDB">
-                </div>
-                <div class="form-group">
-                    <label>Owner User ID *</label>
-                    <input type="number" id="projectOwnerId" required>
-                </div>
-                <button type="button" id="submitProjectBtn" class="btn btn-primary">Create Project</button>
-            </div>
-            <div id="projectsList" class="projects-list"></div>
+            <div id="profileResult" class="alert"></div>
         </div>
     </div>
 
     <script src="/static/app.js"></script>
 </body>
 </html>
-
