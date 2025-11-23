@@ -1231,6 +1231,7 @@ body {
 
 .create-post-btn svg {
     stroke: white;
+    pointer-events: none; /* Prevent SVG from blocking button clicks */
 }
 
 [data-theme="dark"] .create-post-btn {

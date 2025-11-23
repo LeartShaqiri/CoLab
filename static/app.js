@@ -404,32 +404,46 @@ function checkAuth() {
 
 // Show user profile in header
 function showUserProfile() {
-    document.getElementById('headerActions').style.display = 'none';
-    document.getElementById('userProfile').style.display = 'flex';
-    const emoji = getProfileTypeEmoji(currentUser.profile_type);
-    document.getElementById('profileName').textContent = `${emoji} ${currentUser.full_name}`;
-    if (currentUser.profile_picture) {
-        document.getElementById('profileImg').src = currentUser.profile_picture;
+    const headerActions = document.getElementById('headerActions');
+    const userProfile = document.getElementById('userProfile');
+    const profileName = document.getElementById('profileName');
+    const profileImg = document.getElementById('profileImg');
+
+    if (headerActions) headerActions.style.display = 'none';
+    if (userProfile) userProfile.style.display = 'flex';
+
+    if (currentUser && profileName) {
+        const emoji = getProfileTypeEmoji(currentUser.profile_type);
+        profileName.textContent = `${emoji} ${currentUser.full_name}`;
+    }
+
+    if (currentUser && currentUser.profile_picture && profileImg) {
+        profileImg.src = currentUser.profile_picture;
     }
     
     // Display profile type badge
     const badge = document.getElementById('profileTypeBadge');
-    if (currentUser.profile_type) {
+    if (badge && currentUser && currentUser.profile_type) {
         badge.textContent = currentUser.profile_type === 'Coworker' ? '🤝' : '💻';
         badge.style.display = 'flex';
-    } else {
+    } else if (badge) {
         badge.style.display = 'none';
     }
-    
-    document.getElementById('searchSection').style.display = 'block';
+
+    const searchSection = document.getElementById('searchSection');
+    if (searchSection) searchSection.style.display = 'block';
     updateMessageBadge(); // Load message count
 }
 
 // Hide user profile
 function hideUserProfile() {
-    document.getElementById('headerActions').style.display = 'flex';
-    document.getElementById('userProfile').style.display = 'none';
-    document.getElementById('searchSection').style.display = 'none';
+    const headerActions = document.getElementById('headerActions');
+    const userProfile = document.getElementById('userProfile');
+    const searchSection = document.getElementById('searchSection');
+
+    if (headerActions) headerActions.style.display = 'flex';
+    if (userProfile) userProfile.style.display = 'none';
+    if (searchSection) searchSection.style.display = 'none';
     currentUser = null;
     localStorage.removeItem('currentUser');
 }
@@ -714,14 +728,18 @@ function sendMessageHandler() {
     if (!input) return;
     
     const message = input.value.trim();
-    const imageDataUrl = imagePreview ? imagePreview.src : '';
+    // Only get imageDataUrl if it's a valid data URL (starts with "data:image/")
+    let imageDataUrl = '';
+    if (imagePreview && imagePreview.src && imagePreview.src.startsWith('data:image/')) {
+        imageDataUrl = imagePreview.src;
+    }
     
     if (!message && !imageDataUrl) return;
     if (!currentConversationId || !currentUser) return;
     
     // Combine message and image
     let finalMessage = message;
-    if (imageDataUrl && imageDataUrl !== '') {
+    if (imageDataUrl && imageDataUrl.startsWith('data:image/')) {
         if (finalMessage) {
             finalMessage += '\n' + imageDataUrl;
         } else {
@@ -766,11 +784,15 @@ async function sendMessageToConversation(message) {
     }
 }
 
-document.getElementById('closeChatBtn').addEventListener('click', () => {
-    document.getElementById('messagingModal').style.display = 'none';
-    currentConversationId = null;
-    currentChatUserId = null;
-});
+const closeChatBtn = document.getElementById('closeChatBtn');
+if (closeChatBtn) {
+    closeChatBtn.addEventListener('click', () => {
+        const messagingModal = document.getElementById('messagingModal');
+        if (messagingModal) messagingModal.style.display = 'none';
+        currentConversationId = null;
+        currentChatUserId = null;
+    });
+}
 
 // Update message badge with unread count
 async function updateMessageBadge() {
@@ -1402,10 +1424,15 @@ function loadUsers() {
         });
 }
 
-document.getElementById('loadUsersBtn').addEventListener('click', loadUsers);
+const loadUsersBtn = document.getElementById('loadUsersBtn');
+if (loadUsersBtn) {
+    loadUsersBtn.addEventListener('click', loadUsers);
+}
 
 // Find matches
-document.getElementById('matchForm').addEventListener('submit', async (e) => {
+const matchForm = document.getElementById('matchForm');
+if (matchForm) {
+    matchForm.addEventListener('submit', async (e) => {
     e.preventDefault();
     if (!currentUser) {
         alert('Please login first');
@@ -1503,4 +1530,5 @@ document.getElementById('matchForm').addEventListener('submit', async (e) => {
     } catch (error) {
         matchesList.innerHTML = `<div class="alert error">Error: ${error.message}</div>`;
     }
-});
+    });
+}

@@ -1,28 +1,105 @@
 // Post page specific functionality
-const API_BASE = '/api';
 let currentPostType = 'regular'; // 'regular' or 'help'
+
+// Global function to open post modal (defined early so it's available)
+window.openPostModal = function() {
+    console.log('Global openPostModal called');
+    const modal = document.getElementById('postModal');
+    if (modal) {
+        modal.style.display = 'block';
+        console.log('Modal opened via global function');
+    } else {
+        console.error('Modal not found in openPostModal');
+    }
+};
+
+// Global function to close post modal (defined early so it's available)
+window.closePostModal = function() {
+    const modal = document.getElementById('postModal');
+    if (modal) {
+        modal.style.display = 'none';
+    }
+};
 
 // Initialize page
 window.addEventListener('DOMContentLoaded', () => {
-    // Initialize theme first (before checkAuth)
-    initDarkMode();
-    checkAuth();
-    handlePostFormVisibility();
-    initPostModal();
-    initPostTypeSelector();
-    initSlotSelector();
-    loadPosts();
+    console.log('Post page DOMContentLoaded fired');
+    
+    try {
+        // Initialize theme first (before checkAuth)
+        initDarkMode();
+    } catch (e) {
+        console.error('Error in initDarkMode:', e);
+    }
+    
+    try {
+        // Check auth if function exists (from app.js)
+        if (typeof checkAuth === 'function') {
+            checkAuth();
+        }
+    } catch (e) {
+        console.error('Error in checkAuth:', e);
+    }
+    
+    try {
+        handlePostFormVisibility();
+    } catch (e) {
+        console.error('Error in handlePostFormVisibility:', e);
+    }
+    
+    // Initialize modal - CRITICAL - must run
+    try {
+        initPostModal();
+        console.log('initPostModal completed');
+    } catch (e) {
+        console.error('Error in initPostModal:', e);
+        // Try again after a delay if it failed
+        setTimeout(() => {
+            try {
+                initPostModal();
+                console.log('initPostModal retry completed');
+            } catch (e2) {
+                console.error('Error in initPostModal retry:', e2);
+            }
+        }, 100);
+    }
+    
+    try {
+        initPostTypeSelector();
+    } catch (e) {
+        console.error('Error in initPostTypeSelector:', e);
+    }
+    
+    try {
+        initSlotSelector();
+    } catch (e) {
+        console.error('Error in initSlotSelector:', e);
+    }
+    
+    try {
+        loadPosts();
+    } catch (e) {
+        console.error('Error in loadPosts:', e);
+    }
     
     // Form submission
-    const form = document.getElementById('createPostForm');
-    if (form) {
-        form.addEventListener('submit', handlePostSubmit);
+    try {
+        const form = document.getElementById('createPostForm');
+        if (form) {
+            form.addEventListener('submit', handlePostSubmit);
+        }
+    } catch (e) {
+        console.error('Error setting up form:', e);
     }
     
     // Refresh button
-    const refreshBtn = document.getElementById('refreshPostsBtn');
-    if (refreshBtn) {
-        refreshBtn.addEventListener('click', loadPosts);
+    try {
+        const refreshBtn = document.getElementById('refreshPostsBtn');
+        if (refreshBtn) {
+            refreshBtn.addEventListener('click', loadPosts);
+        }
+    } catch (e) {
+        console.error('Error setting up refresh button:', e);
     }
 });
 
@@ -73,6 +150,15 @@ function handlePostFormVisibility() {
         createPostBtn.style.display = 'none';
     } else if (createPostBtn) {
         createPostBtn.style.display = 'flex';
+        // Make sure button is visible and clickable
+        createPostBtn.style.visibility = 'visible';
+        createPostBtn.style.opacity = '1';
+        createPostBtn.style.pointerEvents = 'auto';
+        createPostBtn.style.cursor = 'pointer';
+        createPostBtn.disabled = false;
+        console.log('Post button made visible and clickable');
+    } else {
+        console.error('Create post button not found in handlePostFormVisibility');
     }
 }
 
@@ -82,26 +168,82 @@ function initPostModal() {
     const openBtn = document.getElementById('openPostModalBtn');
     const closeBtn = document.getElementById('closePostModal');
     
-    if (openBtn) {
-        openBtn.addEventListener('click', () => {
-            if (modal) modal.style.display = 'block';
-        });
+    console.log('initPostModal called', { modal: !!modal, openBtn: !!openBtn, closeBtn: !!closeBtn });
+    
+    if (!openBtn) {
+        console.error('Post modal open button not found!');
+        return;
     }
     
+    if (!modal) {
+        console.error('Post modal element not found!');
+        return;
+    }
+    
+    // Ensure modal is hidden initially
+    modal.style.display = 'none';
+    
+    // Make SVG not capture clicks
+    const svg = openBtn.querySelector('svg');
+    if (svg) {
+        svg.style.pointerEvents = 'none';
+    }
+    
+    // Remove any existing onclick to avoid conflicts
+    openBtn.onclick = null;
+    
+    // Simple, direct click handler
+    function openModal(e) {
+        if (e) {
+            e.preventDefault();
+            e.stopPropagation();
+        }
+        console.log('Opening modal...');
+        modal.style.display = 'block';
+        console.log('Modal opened, display:', modal.style.display);
+    }
+    
+    // Add event listener
+    openBtn.addEventListener('click', openModal, false);
+    
+    // Also set onclick as backup
+    openBtn.onclick = openModal;
+    
+    // Update global function
+    window.openPostModal = openModal;
+    
+    // Add click handler to close button
     if (closeBtn) {
-        closeBtn.addEventListener('click', () => {
-            if (modal) modal.style.display = 'none';
-        });
+        function closeModal(e) {
+            if (e) {
+                e.preventDefault();
+                e.stopPropagation();
+            }
+            modal.style.display = 'none';
+        }
+        
+        closeBtn.addEventListener('click', closeModal);
+        closeBtn.onclick = closeModal;
+        window.closePostModal = closeModal;
     }
     
     // Close modal when clicking outside
-    if (modal) {
-        window.addEventListener('click', (e) => {
-            if (e.target === modal) {
-                modal.style.display = 'none';
-            }
-        });
-    }
+    modal.addEventListener('click', function(e) {
+        if (e.target === modal) {
+            modal.style.display = 'none';
+        }
+    });
+    
+    console.log('Post modal initialized successfully');
+    
+    // Test the button
+    console.log('Button test:', {
+        exists: !!openBtn,
+        display: window.getComputedStyle(openBtn).display,
+        pointerEvents: window.getComputedStyle(openBtn).pointerEvents,
+        disabled: openBtn.disabled,
+        hasOnclick: !!openBtn.onclick
+    });
 }
 
 // Post type selector
@@ -233,32 +375,29 @@ async function handlePostSubmit(e) {
             const modal = document.getElementById('postModal');
             if (modal) modal.style.display = 'none';
             
-            // Reload posts and scroll to the new post
-            setTimeout(async () => {
-                await loadPosts();
-                resultDiv.style.display = 'none';
-                
-                // Scroll to the posts feed section to show the new post
+            // Reload posts immediately
+            await loadPosts();
+            resultDiv.style.display = 'none';
+            
+            // Scroll to the posts feed section to show the new post
+            setTimeout(() => {
                 const postsSection = document.querySelector('.posts-section');
                 if (postsSection) {
-                    // Small delay to ensure DOM is updated
-                    setTimeout(() => {
-                        postsSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                        
-                        // Highlight the new post briefly
-                        const newPost = document.querySelector(`[data-post-id="${post.id}"]`);
-                        if (newPost) {
-                            newPost.style.transition = 'all 0.3s ease';
-                            newPost.style.transform = 'scale(1.02)';
-                            newPost.style.boxShadow = '0 8px 24px rgba(29, 191, 115, 0.3)';
-                            setTimeout(() => {
-                                newPost.style.transform = 'scale(1)';
-                                newPost.style.boxShadow = '';
-                            }, 2000);
-                        }
-                    }, 300);
+                    postsSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                    
+                    // Highlight the new post briefly
+                    const newPost = document.querySelector(`[data-post-id="${post.id}"]`);
+                    if (newPost) {
+                        newPost.style.transition = 'all 0.3s ease';
+                        newPost.style.transform = 'scale(1.02)';
+                        newPost.style.boxShadow = '0 8px 24px rgba(29, 191, 115, 0.3)';
+                        setTimeout(() => {
+                            newPost.style.transform = 'scale(1)';
+                            newPost.style.boxShadow = '';
+                        }, 2000);
+                    }
                 }
-            }, 1000);
+            }, 300);
         } else {
             const error = await safeJsonParse(response);
             showPostResult(error.detail || 'Failed to create post', 'error');

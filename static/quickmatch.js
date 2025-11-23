@@ -1,5 +1,4 @@
 // Quick Match page specific functionality
-const API_BASE = '/api';
 let allUsers = [];
 let currentUserIndex = 0;
 let currentCard = null;
@@ -12,7 +11,12 @@ window.addEventListener('DOMContentLoaded', () => {
     // Initialize theme first
     initDarkMode();
     
-    // Check authentication
+    // Check authentication (from app.js) to show user profile
+    if (typeof checkAuth === 'function') {
+        checkAuth();
+    }
+    
+    // Check authentication and load users
     checkAuthAndLoadUsers();
 });
 
@@ -112,22 +116,39 @@ async function loadAllUsers() {
     const currentUser = JSON.parse(userData);
     
     try {
+        console.log('Loading users for Quick Match...');
         const response = await fetch(`${API_BASE}/users?current_user_id=${currentUser.id}`);
+        console.log('Users API response status:', response.status);
+        
         if (response.ok) {
             const users = await safeJsonParse(response);
+            console.log(`Received ${users.length} users from API`);
             
             // Filter out current user and shuffle randomly
             allUsers = users
-                .filter(user => user.id !== currentUser.id)
+                .filter(user => user.id !== currentUser.id && user.is_active !== false)
                 .sort(() => Math.random() - 0.5); // Random shuffle
             
             currentUserIndex = 0;
-            console.log(`Loaded ${allUsers.length} users for Quick Match`);
+            console.log(`Loaded ${allUsers.length} users for Quick Match (after filtering)`);
+            
+            if (allUsers.length === 0) {
+                const swipeCards = document.getElementById('swipeCards');
+                if (swipeCards) {
+                    swipeCards.innerHTML = `
+                        <div class="empty-state">
+                            <h3>No other users available</h3>
+                            <p>There are no other active users to match with. Check back later!</p>
+                        </div>
+                    `;
+                }
+            }
         } else {
-            console.error('Failed to load users:', response.status);
+            const errorText = await response.text();
+            console.error('Failed to load users:', response.status, errorText);
             const swipeCards = document.getElementById('swipeCards');
             if (swipeCards) {
-                swipeCards.innerHTML = `<div class="alert error">Failed to load users. Please try again.</div>`;
+                swipeCards.innerHTML = `<div class="alert error">Failed to load users (${response.status}). Please try again.</div>`;
             }
             allUsers = [];
         }
@@ -135,7 +156,7 @@ async function loadAllUsers() {
         console.error('Error loading users:', error);
         const swipeCards = document.getElementById('swipeCards');
         if (swipeCards) {
-            swipeCards.innerHTML = `<div class="alert error">Error: ${error.message}</div>`;
+            swipeCards.innerHTML = `<div class="alert error">Error: ${error.message}. Please check your connection and try again.</div>`;
         }
         allUsers = [];
     }

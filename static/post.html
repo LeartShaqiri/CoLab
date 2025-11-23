@@ -78,7 +78,7 @@
             </section>
 
             <!-- Post Creation Modal -->
-            <div id="postModal" class="modal">
+            <div id="postModal" class="modal" style="display: none;">
                 <div class="modal-content">
                     <span class="close" id="closePostModal">&times;</span>
                     <h2>Create a Post</h2>
@@ -224,6 +224,43 @@
                 <button type="submit" class="btn-primary">Save Profile</button>
             </form>
             <div id="profileResult" class="alert"></div>
+        </div>
+    </div>
+
+    <!-- Messaging Modal -->
+    <div id="messagingModal" class="modal">
+        <div class="modal-content large">
+            <span class="close">&times;</span>
+            <div id="messagingContent">
+                <!-- Conversations List -->
+                <div id="conversationsList" style="display: none;">
+                    <h2>Messages</h2>
+                    <div id="conversationsContainer" style="max-height: 500px; overflow-y: auto;">
+                        <div class="loading">Loading conversations...</div>
+                    </div>
+                </div>
+                <!-- Initial greeting selection -->
+                <div id="greetingSelection" style="display: none;">
+                    <h2>Send a Message</h2>
+                    <p style="color: var(--text-light); margin-bottom: 20px;">Choose a greeting to start the conversation:</p>
+                    <div id="greetingOptions" style="display: flex; flex-direction: column; gap: 12px;"></div>
+                </div>
+                <!-- Chat interface -->
+                <div id="chatInterface" style="display: none;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; padding-bottom: 15px; border-bottom: 2px solid var(--border);">
+                        <div style="display: flex; align-items: center; gap: 10px;">
+                            <button class="btn-secondary" id="backToConversationsBtn" style="padding: 8px 12px;">← Back</button>
+                            <h2 id="chatUserName" style="margin: 0;"></h2>
+                        </div>
+                        <button class="btn-secondary" id="closeChatBtn">Close</button>
+                    </div>
+                    <div id="messagesContainer" style="height: 400px; overflow-y: auto; margin-bottom: 20px; padding: 15px; background: var(--bg-light); border-radius: 8px; display: flex; flex-direction: column; gap: 12px;"></div>
+                    <div id="messageInputContainer" style="display: flex; gap: 10px;">
+                        <input type="text" id="messageInput" placeholder="Type your message..." style="flex: 1; padding: 12px; border: 1px solid var(--border); border-radius: 6px; font-size: 1em;">
+                        <button class="btn-primary" id="sendMessageBtn">Send</button>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
 

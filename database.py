@@ -296,6 +296,19 @@ def migrate_db():
             except Exception as e:
                 print(f"Could not add github_url column: {e}")
 
+    # Check and migrate posts table
+    if 'posts' in table_names:
+        posts_columns = [col['name'] for col in inspector.get_columns('posts')]
+
+        with engine.begin() as conn:
+            # Add post_type column if it doesn't exist
+            if 'post_type' not in posts_columns:
+                try:
+                    conn.execute(text("ALTER TABLE posts ADD COLUMN post_type VARCHAR(20) DEFAULT 'regular'"))
+                    print("Added 'post_type' column to posts table")
+                except Exception as e:
+                    print(f"Could not add post_type column to posts table: {e}")
+
 
 def get_db():
     """Dependency to get database session."""
