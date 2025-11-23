@@ -26,6 +26,353 @@ window.addEventListener('DOMContentLoaded', () => {
     // Check auth first, then load users (so match percentages are included)
     checkAuth();
     loadUsers();
+    initDarkMode();
+});
+
+// Dark Mode Toggle
+function initDarkMode() {
+    const savedTheme = localStorage.getItem('theme') || 'light';
+    document.documentElement.setAttribute('data-theme', savedTheme);
+    updateDarkModeIcon(savedTheme);
+}
+
+function toggleDarkMode() {
+    const currentTheme = document.documentElement.getAttribute('data-theme');
+    const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+    document.documentElement.setAttribute('data-theme', newTheme);
+    localStorage.setItem('theme', newTheme);
+    updateDarkModeIcon(newTheme);
+}
+
+function updateDarkModeIcon(theme) {
+    const moonIcon = document.querySelector('.moon-icon');
+    const sunIcon = document.querySelector('.sun-icon');
+    if (theme === 'dark') {
+        if (moonIcon) moonIcon.style.display = 'none';
+        if (sunIcon) sunIcon.style.display = 'block';
+    } else {
+        if (moonIcon) moonIcon.style.display = 'block';
+        if (sunIcon) sunIcon.style.display = 'none';
+    }
+}
+
+document.getElementById('darkModeToggle').addEventListener('click', toggleDarkMode);
+
+// Quiz Data
+const frontendQuizzes = [
+    {
+        code: `<div class="container">
+    <h1>Welcome</h1>
+    <p class="text">Hello World</p>
+    <button onclick="submit()">Submit</button>
+</div>
+
+<style>
+    .container {
+        width: 100%;
+        padding: 20px;
+    }
+    h1 {
+        color: blue;
+        font-size: 24px;
+    }
+    .text {
+        color: red;
+    }
+    button {
+        background-color: green;
+        color: white;
+    }
+</style>`,
+        correctLines: [8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25],
+        description: "The CSS is placed inside the HTML file, but it should be in a separate file or properly formatted."
+    },
+    {
+        code: `<div>
+    <h1>Title</h1>
+    <p>Content</p>
+</div>
+
+<style>
+    div {
+        color: blue;
+    }
+    h1 {
+        font-size: 24px;
+    }
+    p {
+        margin: 10px;
+    }
+</style>`,
+        correctLines: [8],
+        description: "The CSS selector 'div' is too broad and will affect all divs. It should be more specific."
+    },
+    {
+        code: `<button class="btn-primary">Click Me</button>
+
+<style>
+    .btn-primary {
+        background-color: #1dbf73;
+        color: white;
+        padding: 10px 20px;
+        border: none;
+        border-radius: 5px;
+    }
+    .btn-primary:hover {
+        background-color: #19a463;
+    }
+</style>`,
+        correctLines: [5, 6, 7, 8, 9, 10, 11],
+        description: "The button is missing a cursor pointer style and transition effects for better UX."
+    }
+];
+
+const pythonQuizzes = [
+    {
+        code: `def calculate_sum(a, b):
+    result = a + b
+    return result
+
+def main():
+    x = 10
+    y = 20
+    sum_result = calculate_sum(x, y)
+    print("The sum is: " + sum_result)
+
+main()`,
+        correctLines: [7],
+        description: "Type error: trying to concatenate string with integer. Should convert sum_result to string."
+    },
+    {
+        code: `def divide_numbers(a, b):
+    result = a / b
+    return result
+
+x = 10
+y = 0
+result = divide_numbers(x, y)
+print(f"Result: {result}")`,
+        correctLines: [2, 6],
+        description: "Division by zero error. Need to check if b is zero before dividing."
+    },
+    {
+        code: `def get_item(lst, index):
+    return lst[index]
+
+my_list = [1, 2, 3]
+item = get_item(my_list, 5)
+print(item)`,
+        correctLines: [2, 5],
+        description: "Index out of range error. Need to check if index is within list bounds."
+    },
+    {
+        code: `def process_data(data):
+    if data is None:
+        return "No data"
+    processed = data.upper()
+    return processed
+
+result = process_data(123)
+print(result)`,
+        correctLines: [4, 6],
+        description: "AttributeError: integers don't have .upper() method. Need to check data type."
+    }
+];
+
+// Quiz State
+let frontendQuizIndex = 0;
+let pythonQuizIndex = 0;
+let frontendSelectedLines = new Set();
+let pythonSelectedLines = new Set();
+
+// Frontend Quiz Functions
+function openFrontendQuiz() {
+    const modal = document.getElementById('frontendQuizModal');
+    modal.style.display = 'block';
+    resetFrontendQuiz();
+    loadFrontendQuestion();
+}
+
+function loadFrontendQuestion() {
+    if (frontendQuizIndex >= frontendQuizzes.length) {
+        frontendQuizIndex = 0;
+    }
+    
+    const quiz = frontendQuizzes[frontendQuizIndex];
+    frontendSelectedLines.clear();
+    
+    document.getElementById('frontendQuestionNum').textContent = frontendQuizIndex + 1;
+    const codeBlock = document.getElementById('frontendCodeBlock');
+    
+    const lines = quiz.code.split('\n');
+    codeBlock.innerHTML = lines.map((line, index) => {
+        const lineNum = index + 1;
+        return `<div class="code-line" data-line="${lineNum}" style="padding: 4px 8px; cursor: pointer; user-select: none; border-radius: 4px; transition: background 0.2s;">${escapeHtml(line || ' ')}</div>`;
+    }).join('');
+    
+    // Add click handlers
+    codeBlock.querySelectorAll('.code-line').forEach(lineEl => {
+        lineEl.addEventListener('click', function() {
+            const lineNum = parseInt(this.dataset.line);
+            if (frontendSelectedLines.has(lineNum)) {
+                frontendSelectedLines.delete(lineNum);
+                this.style.background = '';
+            } else {
+                frontendSelectedLines.add(lineNum);
+                this.style.background = 'rgba(29, 191, 115, 0.3)';
+            }
+        });
+    });
+    
+    document.getElementById('frontendSubmitBtn').style.display = 'inline-block';
+    document.getElementById('frontendNextBtn').style.display = 'none';
+    document.getElementById('frontendQuizResult').style.display = 'none';
+}
+
+function submitFrontendAnswer() {
+    const quiz = frontendQuizzes[frontendQuizIndex];
+    const selected = Array.from(frontendSelectedLines).sort((a, b) => a - b);
+    const correct = quiz.correctLines.sort((a, b) => a - b);
+    
+    const isCorrect = selected.length === correct.length && 
+                     selected.every((val, idx) => val === correct[idx]);
+    
+    const resultDiv = document.getElementById('frontendQuizResult');
+    resultDiv.style.display = 'block';
+    
+    if (isCorrect) {
+        resultDiv.className = 'alert success';
+        resultDiv.innerHTML = '<strong>✅ Correct!</strong> You found the problem!';
+        document.getElementById('frontendSubmitBtn').style.display = 'none';
+        document.getElementById('frontendNextBtn').style.display = 'inline-block';
+    } else {
+        resultDiv.className = 'alert error';
+        resultDiv.innerHTML = '<strong>❌ Incorrect.</strong> Try again! The problem is: ' + quiz.description;
+    }
+}
+
+function loadNextFrontendQuestion() {
+    frontendQuizIndex++;
+    loadFrontendQuestion();
+}
+
+function resetFrontendQuiz() {
+    frontendQuizIndex = 0;
+    frontendSelectedLines.clear();
+    loadFrontendQuestion();
+}
+
+// Python Quiz Functions
+function openPythonQuiz() {
+    const modal = document.getElementById('pythonQuizModal');
+    modal.style.display = 'block';
+    resetPythonQuiz();
+    loadPythonQuestion();
+}
+
+function loadPythonQuestion() {
+    if (pythonQuizIndex >= pythonQuizzes.length) {
+        pythonQuizIndex = 0;
+    }
+    
+    const quiz = pythonQuizzes[pythonQuizIndex];
+    pythonSelectedLines.clear();
+    
+    document.getElementById('pythonQuestionNum').textContent = pythonQuizIndex + 1;
+    const codeBlock = document.getElementById('pythonCodeBlock');
+    
+    const lines = quiz.code.split('\n');
+    codeBlock.innerHTML = lines.map((line, index) => {
+        const lineNum = index + 1;
+        return `<div class="code-line" data-line="${lineNum}" style="padding: 4px 8px; cursor: pointer; user-select: none; border-radius: 4px; transition: background 0.2s;">${escapeHtml(line || ' ')}</div>`;
+    }).join('');
+    
+    // Add click handlers
+    codeBlock.querySelectorAll('.code-line').forEach(lineEl => {
+        lineEl.addEventListener('click', function() {
+            const lineNum = parseInt(this.dataset.line);
+            if (pythonSelectedLines.has(lineNum)) {
+                pythonSelectedLines.delete(lineNum);
+                this.style.background = '';
+            } else {
+                pythonSelectedLines.add(lineNum);
+                this.style.background = 'rgba(29, 191, 115, 0.3)';
+            }
+        });
+    });
+    
+    document.getElementById('pythonSubmitBtn').style.display = 'inline-block';
+    document.getElementById('pythonNextBtn').style.display = 'none';
+    document.getElementById('pythonQuizResult').style.display = 'none';
+}
+
+function submitPythonAnswer() {
+    const quiz = pythonQuizzes[pythonQuizIndex];
+    const selected = Array.from(pythonSelectedLines).sort((a, b) => a - b);
+    const correct = quiz.correctLines.sort((a, b) => a - b);
+    
+    const isCorrect = selected.length === correct.length && 
+                     selected.every((val, idx) => val === correct[idx]);
+    
+    const resultDiv = document.getElementById('pythonQuizResult');
+    resultDiv.style.display = 'block';
+    
+    if (isCorrect) {
+        resultDiv.className = 'alert success';
+        resultDiv.innerHTML = '<strong>✅ Correct!</strong> You found the bug!';
+        document.getElementById('pythonSubmitBtn').style.display = 'none';
+        document.getElementById('pythonNextBtn').style.display = 'inline-block';
+    } else {
+        resultDiv.className = 'alert error';
+        resultDiv.innerHTML = '<strong>❌ Incorrect.</strong> Try again! The problem is: ' + quiz.description;
+    }
+}
+
+function loadNextPythonQuestion() {
+    pythonQuizIndex++;
+    loadPythonQuestion();
+}
+
+function resetPythonQuiz() {
+    pythonQuizIndex = 0;
+    pythonSelectedLines.clear();
+    loadPythonQuestion();
+}
+
+// Helper function to escape HTML
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+// Close quiz modals
+document.addEventListener('DOMContentLoaded', () => {
+    const frontendModal = document.getElementById('frontendQuizModal');
+    const pythonModal = document.getElementById('pythonQuizModal');
+    
+    if (frontendModal) {
+        frontendModal.querySelector('.close').onclick = () => {
+            frontendModal.style.display = 'none';
+            resetFrontendQuiz();
+        };
+    }
+    
+    if (pythonModal) {
+        pythonModal.querySelector('.close').onclick = () => {
+            pythonModal.style.display = 'none';
+        };
+    }
+    
+    window.onclick = (event) => {
+        if (event.target === frontendModal) {
+            frontendModal.style.display = 'none';
+            resetFrontendQuiz();
+        }
+        if (event.target === pythonModal) {
+            pythonModal.style.display = 'none';
+        }
+    };
 });
 
 // Helper function to get profile type emoji
