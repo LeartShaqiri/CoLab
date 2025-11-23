@@ -446,7 +446,12 @@ async function loadPosts() {
                 const postType = post.post_type || 'regular';
                 const postTypeLabel = postType === 'help' ? '🆘 Need Help' : '💭 Share a Thought';
                 const postTypeClass = postType === 'help' ? 'post-type-help' : 'post-type-regular';
-                
+
+                // Check if current user is the author
+                const userData = localStorage.getItem('currentUser');
+                const currentUser = userData ? JSON.parse(userData) : null;
+                const isCurrentUserAuthor = currentUser && currentUser.id === post.author_id;
+
                 const timeAgo = getTimeAgo(new Date(post.created_at));
                 
                 return `
@@ -459,7 +464,7 @@ async function loadPosts() {
                             </div>
                             <div style="display: flex; align-items: center; gap: 10px; margin-left: auto;">
                                 <div class="post-type-badge ${postTypeClass}">${postTypeLabel}</div>
-                                ${postType === 'help' ? `
+                                ${postType === 'help' && !isCurrentUserAuthor ? `
                                     <div class="post-menu">
                                         <button class="post-menu-btn" type="button" aria-label="Post options">⋯</button>
                                         <div class="post-dropdown-menu">
@@ -478,14 +483,58 @@ async function loadPosts() {
                         ${postType === 'help' && post.slot_count ? `
                             <div class="post-slots-info">
                                 <strong>Collaboration Slots:</strong> ${post.filled_slots || 0} / ${post.slot_count}
-                                ${post.slots && post.slots.length > 0 ? `
-                                    <div class="slot-users" style="margin-top: 10px;">
-                                        ${post.slots.map(slot => {
-                                            const slotUser = slot.user || {};
-                                            return `<span class="slot-user-tag">${slotUser.full_name || slotUser.username || 'User'}</span>`;
-                                        }).join('')}
-                                    </div>
-                                ` : ''}
+                                <div class="slot-buttons" style="margin-top: 10px; display: flex; flex-wrap: wrap; gap: 8px;">
+                                    ${Array.from({length: post.slot_count}, (_, i) => {
+                                        const slotIndex = i + 1;
+                                        const isFilled = (post.slots && post.slots.length > i);
+                                        const slotUser = isFilled ? post.slots[i].user : null;
+                                        const slotUserName = slotUser ? (slotUser.full_name || slotUser.username || 'User') : '';
+                                        
+                                        if (isFilled && slotUser) {
+                                            const slotUserInitials = slotUserName.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
+                                            const slotUserAvatar = slotUser.profile_picture || `data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%2240%22 height=%2240%22%3E%3Ccircle cx=%2220%22 cy=%2220%22 r=%2218%22 fill=%22%231dbf73%22/%3E%3Ctext x=%2220%22 y=%2225%22 font-size=%2214%22 fill=%22white%22 text-anchor=%22middle%22%3E${slotUserInitials}%3C/text%3E%3C/svg%3E`;
+                                            return `
+                                                <div class="slot-filled">
+                                                    <img src="${slotUserAvatar}" alt="${slotUserName}" class="slot-user-avatar" onerror="this.src='data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%2240%22 height=%2240%22%3E%3Ccircle cx=%2220%22 cy=%2220%22 r=%2218%22 fill=%22%231dbf73%22/%3E%3Ctext x=%2220%22 y=%2225%22 font-size=%2214%22 fill=%22white%22 text-anchor=%22middle%22%3E${slotUserInitials}%3C/text%3E%3C/svg%3E'">
+                                                    <span class="slot-user-name">${slotUserName}</span>
+                                                </div>
+                                            `;
+                                        } else {
+                                            return `<button class="slot-available" data-post-id="${post.id}" data-slot-index="${slotIndex}" title="Click to request this slot">Slot ${slotIndex}</button>`;
+                                        }
+                                    }).join('')}
+                                </div>
+                            </div>
+                        ` : ''}
+                        ${postType === 'regular' ? `
+                            <div class="post-comments-section">
+                                <div class="comments-header">
+                                    <h4>Comments (${post.comments ? post.comments.length : 0})</h4>
+                                </div>
+                                <div class="comments-list" id="comments-${post.id}">
+                                    ${post.comments && post.comments.length > 0 ? post.comments.map(comment => {
+                                        const commentAuthor = comment.author || {};
+                                        const commentInitials = commentAuthor.full_name ? commentAuthor.full_name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2) : '?';
+                                        const commentAvatar = commentAuthor.profile_picture || `data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%2240%22 height=%2240%22%3E%3Ccircle cx=%2220%22 cy=%2220%22 r=%2218%22 fill=%22%231dbf73%22/%3E%3Ctext x=%2220%22 y=%2225%22 font-size=%2214%22 fill=%22white%22 text-anchor=%22middle%22%3E${commentInitials}%3C/text%3E%3C/svg%3E`;
+                                        const commentTimeAgo = getTimeAgo(new Date(comment.created_at));
+                                        return `
+                                            <div class="comment-item">
+                                                <img src="${commentAvatar}" alt="${commentAuthor.full_name || 'User'}" class="comment-avatar" onerror="this.src='data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%2240%22 height=%2240%22%3E%3Ccircle cx=%2220%22 cy=%2220%22 r=%2218%22 fill=%22%231dbf73%22/%3E%3Ctext x=%2220%22 y=%2225%22 font-size=%2214%22 fill=%22white%22 text-anchor=%22middle%22%3E${commentInitials}%3C/text%3E%3C/svg%3E'">
+                                                <div class="comment-content">
+                                                    <div class="comment-header">
+                                                        <strong>${commentAuthor.full_name || commentAuthor.username || 'Unknown User'}</strong>
+                                                        <span class="comment-time">${commentTimeAgo}</span>
+                                                    </div>
+                                                    <div class="comment-text">${escapeHtml(comment.content)}</div>
+                                                </div>
+                                            </div>
+                                        `;
+                                    }).join('') : '<p class="no-comments">No comments yet. Be the first to comment!</p>'}
+                                </div>
+                                <div class="comment-form">
+                                    <textarea class="comment-input" id="comment-input-${post.id}" placeholder="Write a comment..." rows="2"></textarea>
+                                    <button class="btn-primary comment-submit-btn" data-post-id="${post.id}" type="button">Post Comment</button>
+                                </div>
                             </div>
                         ` : ''}
                     </div>
@@ -538,6 +587,27 @@ function attachPostMenuListeners() {
             e.stopPropagation();
             const postId = btn.getAttribute('data-post-id');
             await handleRequestHelp(postId, btn);
+        });
+    });
+
+    // Slot request button handlers
+    const slotButtons = document.querySelectorAll('.slot-available');
+    slotButtons.forEach(btn => {
+        btn.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            const postId = btn.getAttribute('data-post-id');
+            const slotIndex = btn.getAttribute('data-slot-index');
+            await handleSlotRequest(postId, slotIndex, btn);
+        });
+    });
+
+    // Comment submit button handlers
+    const commentSubmitButtons = document.querySelectorAll('.comment-submit-btn');
+    commentSubmitButtons.forEach(btn => {
+        btn.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            const postId = btn.getAttribute('data-post-id');
+            await handleCommentSubmit(postId, btn);
         });
     });
 }
@@ -595,6 +665,296 @@ async function handleRequestHelp(postId, buttonElement) {
         } else {
             const error = await safeJsonParse(response);
             alert(error.detail || 'Failed to send help request');
+            buttonElement.disabled = false;
+            buttonElement.textContent = originalText;
+        }
+    } catch (error) {
+        alert(`Error: ${error.message}`);
+        buttonElement.disabled = false;
+        buttonElement.textContent = originalText;
+    }
+}
+
+// Handle Slot Request action
+async function handleSlotRequest(postId, slotIndex, buttonElement) {
+    // Check if user is logged in
+    const userData = localStorage.getItem('currentUser');
+    if (!userData) {
+        alert('Please login first to request a slot');
+        return;
+    }
+
+    const currentUser = JSON.parse(userData);
+    const originalText = buttonElement.textContent;
+
+    // Disable button and show loading state
+    buttonElement.disabled = true;
+    buttonElement.textContent = 'Requesting...';
+    buttonElement.style.background = '#ccc';
+
+    try {
+        const response = await fetch(`${API_BASE}/posts/${postId}/request-slot`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                user_id: currentUser.id
+            })
+        });
+
+        if (response.ok) {
+            const slotData = await safeJsonParse(response);
+            buttonElement.textContent = 'Requested ✓';
+            buttonElement.disabled = true;
+            buttonElement.style.opacity = '0.6';
+            buttonElement.className = 'slot-requested';
+
+            // Update the slot display to show it's claimed
+            const postCard = buttonElement.closest('.post-card');
+            if (postCard) {
+                const successMsg = document.createElement('div');
+                successMsg.className = 'alert success';
+                successMsg.textContent = `Slot ${slotIndex} requested successfully! The post author will review your request.`;
+                successMsg.style.marginTop = '10px';
+                postCard.appendChild(successMsg);
+
+                // Remove message after 5 seconds
+                setTimeout(() => {
+                    successMsg.remove();
+                }, 5000);
+            }
+        } else {
+            const error = await safeJsonParse(response);
+            alert(error.detail || 'Failed to request slot');
+            buttonElement.disabled = false;
+            buttonElement.textContent = originalText;
+            buttonElement.style.background = '';
+        }
+    } catch (error) {
+        alert(`Error: ${error.message}`);
+        buttonElement.disabled = false;
+        buttonElement.textContent = originalText;
+        buttonElement.style.background = '';
+    }
+}
+
+// Handle Manage Requests action
+async function handleManageRequests(postId) {
+    // Check if user is logged in
+    const userData = localStorage.getItem('currentUser');
+    if (!userData) {
+        alert('Please login first');
+        return;
+    }
+
+    const currentUser = JSON.parse(userData);
+
+    try {
+        const response = await fetch(`${API_BASE}/posts/${postId}/slot-requests?current_user_id=${currentUser.id}`);
+        if (response.ok) {
+            const data = await safeJsonParse(response);
+            showRequestsModal(postId, data.slot_requests);
+        } else {
+            const error = await safeJsonParse(response);
+            alert(error.detail || 'Failed to load slot requests');
+        }
+    } catch (error) {
+        alert(`Error: ${error.message}`);
+    }
+}
+
+// Show requests management modal
+function showRequestsModal(postId, requests) {
+    // Create modal HTML
+    const modalHtml = `
+        <div id="requestsModal" class="modal">
+            <div class="modal-content large">
+                <span class="close" id="closeRequestsModal">&times;</span>
+                <h2>Manage Slot Requests</h2>
+                <div id="requestsList">
+                    ${requests.length === 0 ? '<p>No slot requests yet.</p>' :
+                        requests.map(request => `
+                            <div class="request-item" data-request-id="${request.id}">
+                                <div class="request-user">
+                                    <img src="${request.requester_user.profile_picture || `data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%2250%22 height=%2250%22%3E%3Ccircle cx=%2225%22 cy=%2225%22 r=%2223%22 fill=%22%231dbf73%22/%3E%3Ctext x=%2225%22 y=%2230%22 font-size=%2216%22 fill=%22white%22 text-anchor=%22middle%22%3E${request.requester_user.full_name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)}%3C/text%3E%3C/svg%3E`}" alt="${request.requester_user.full_name}" class="request-avatar">
+                                    <div class="request-user-info">
+                                        <h4>${request.requester_user.full_name}</h4>
+                                        <p>@${request.requester_user.username}</p>
+                                        ${request.requester_user.bio ? `<p class="request-bio">${request.requester_user.bio}</p>` : ''}
+                                        ${request.requester_user.interests && request.requester_user.interests.length > 0 ? `
+                                            <div class="request-tags">
+                                                ${request.requester_user.interests.slice(0, 3).map(interest => `<span class="request-tag">${interest}</span>`).join('')}
+                                            </div>
+                                        ` : ''}
+                                    </div>
+                                </div>
+                                <div class="request-status status-${request.status}">
+                                    ${request.status.charAt(0).toUpperCase() + request.status.slice(1)}
+                                </div>
+                                ${request.status === 'pending' ? `
+                                    <div class="request-actions">
+                                        <button class="btn-accept" onclick="handleRequestAction(${postId}, ${request.id}, 'accepted')">Accept</button>
+                                        <button class="btn-reject" onclick="handleRequestAction(${postId}, ${request.id}, 'rejected')">Reject</button>
+                                    </div>
+                                ` : ''}
+                            </div>
+                        `).join('')
+                    }
+                </div>
+            </div>
+        </div>
+    `;
+
+    // Add modal to page
+    document.body.insertAdjacentHTML('beforeend', modalHtml);
+
+    // Setup close button
+    document.getElementById('closeRequestsModal').addEventListener('click', () => {
+        document.getElementById('requestsModal').remove();
+    });
+
+    // Close modal when clicking outside
+    document.getElementById('requestsModal').addEventListener('click', (e) => {
+        if (e.target.id === 'requestsModal') {
+            document.getElementById('requestsModal').remove();
+        }
+    });
+}
+
+// Handle accept/reject actions
+async function handleRequestAction(postId, requestId, action) {
+    const userData = localStorage.getItem('currentUser');
+    if (!userData) return;
+
+    const currentUser = JSON.parse(userData);
+
+    try {
+        const response = await fetch(`${API_BASE}/posts/${postId}/slot-requests/${requestId}?current_user_id=${currentUser.id}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ status: action })
+        });
+
+        if (response.ok) {
+            const result = await safeJsonParse(response);
+
+            // Update the request item in the modal
+            const requestItem = document.querySelector(`[data-request-id="${requestId}"]`);
+            if (requestItem) {
+                const statusElement = requestItem.querySelector('.request-status');
+                const actionsElement = requestItem.querySelector('.request-actions');
+
+                statusElement.textContent = action.charAt(0).toUpperCase() + action.slice(1);
+                statusElement.className = `request-status status-${action}`;
+
+                if (actionsElement) {
+                    actionsElement.remove();
+                }
+            }
+
+            // Refresh the posts to show updated slots
+            loadPosts();
+        } else {
+            const error = await safeJsonParse(response);
+            alert(error.detail || `Failed to ${action} request`);
+        }
+    } catch (error) {
+        alert(`Error: ${error.message}`);
+    }
+}
+
+// Handle Comment Submit action
+async function handleCommentSubmit(postId, buttonElement) {
+    // Check if user is logged in
+    const userData = localStorage.getItem('currentUser');
+    if (!userData) {
+        alert('Please login first to comment');
+        return;
+    }
+
+    const currentUser = JSON.parse(userData);
+    const commentInput = document.getElementById(`comment-input-${postId}`);
+    
+    if (!commentInput) {
+        console.error('Comment input not found');
+        return;
+    }
+
+    const commentText = commentInput.value.trim();
+    
+    if (!commentText) {
+        alert('Please enter a comment');
+        return;
+    }
+
+    const originalText = buttonElement.textContent;
+    
+    // Disable button and show loading state
+    buttonElement.disabled = true;
+    buttonElement.textContent = 'Posting...';
+
+    try {
+        const response = await fetch(`${API_BASE}/posts/${postId}/comments`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                content: commentText,
+                author_id: currentUser.id
+            })
+        });
+
+        if (response.ok) {
+            const newComment = await safeJsonParse(response);
+            
+            // Clear the input
+            commentInput.value = '';
+            
+            // Reset button
+            buttonElement.disabled = false;
+            buttonElement.textContent = originalText;
+
+            // Add the new comment to the comments list
+            const commentsList = document.getElementById(`comments-${postId}`);
+            if (commentsList) {
+                // Remove "no comments" message if it exists
+                const noCommentsMsg = commentsList.querySelector('.no-comments');
+                if (noCommentsMsg) {
+                    noCommentsMsg.remove();
+                }
+
+                // Create comment HTML
+                const commentAuthor = newComment.author || {};
+                const commentInitials = commentAuthor.full_name ? commentAuthor.full_name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2) : '?';
+                const commentAvatar = commentAuthor.profile_picture || `data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%2240%22 height=%2240%22%3E%3Ccircle cx=%2220%22 cy=%2220%22 r=%2218%22 fill=%22%231dbf73%22/%3E%3Ctext x=%2220%22 y=%2225%22 font-size=%2214%22 fill=%22white%22 text-anchor=%22middle%22%3E${commentInitials}%3C/text%3E%3C/svg%3E`;
+                const commentTimeAgo = getTimeAgo(new Date(newComment.created_at));
+                
+                const commentHtml = `
+                    <div class="comment-item">
+                        <img src="${commentAvatar}" alt="${commentAuthor.full_name || 'User'}" class="comment-avatar" onerror="this.src='data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%2240%22 height=%2240%22%3E%3Ccircle cx=%2220%22 cy=%2220%22 r=%2218%22 fill=%22%231dbf73%22/%3E%3Ctext x=%2220%22 y=%2225%22 font-size=%2214%22 fill=%22white%22 text-anchor=%22middle%22%3E${commentInitials}%3C/text%3E%3C/svg%3E'">
+                        <div class="comment-content">
+                            <div class="comment-header">
+                                <strong>${commentAuthor.full_name || commentAuthor.username || 'Unknown User'}</strong>
+                                <span class="comment-time">${commentTimeAgo}</span>
+                            </div>
+                            <div class="comment-text">${escapeHtml(newComment.content)}</div>
+                        </div>
+                    </div>
+                `;
+                
+                commentsList.insertAdjacentHTML('beforeend', commentHtml);
+
+                // Update comment count in header
+                const commentsHeader = commentsList.previousElementSibling;
+                if (commentsHeader && commentsHeader.querySelector('h4')) {
+                    const currentCount = commentsList.querySelectorAll('.comment-item').length;
+                    commentsHeader.querySelector('h4').textContent = `Comments (${currentCount})`;
+                }
+            }
+
+            // Reload posts to ensure everything is in sync
+            loadPosts();
+        } else {
+            const error = await safeJsonParse(response);
+            alert(error.detail || 'Failed to post comment');
             buttonElement.disabled = false;
             buttonElement.textContent = originalText;
         }

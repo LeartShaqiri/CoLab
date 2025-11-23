@@ -11,7 +11,7 @@ from typing import List, Optional
 import os
 
 from database import (
-    init_db, get_db, User, Skill, Project, Match, Conversation, Message, Post, PostSlot, HelpRequest,
+    init_db, get_db, User, Skill, Project, Match, Conversation, Message, Post, PostSlot, HelpRequest, SlotRequest, Comment,
     user_skills, project_skills
 )
 from models import (
@@ -21,11 +21,14 @@ from models import (
     ConnectionRequest, ConnectionResponse,
     MessageCreate, MessageResponse, ConversationResponse, ConversationCreate,
     PostCreate, PostResponse, PostSlotResponse, ClaimSlotRequest,
-    HelpRequestCreate, HelpRequestResponse
+    HelpRequestCreate, HelpRequestResponse,
+    SlotRequestCreate, SlotRequestResponse, SlotRequestUpdate,
+    CommentCreate, CommentResponse
 )
 from matching import find_best_matches
 import hashlib
 import json
+from datetime import datetime
 
 def safe_json_loads(json_str):
     """Safely parse JSON string, return empty list if invalid."""
@@ -803,6 +806,7 @@ def get_posts(skip: int = 0, limit: int = 50, db: Session = Depends(get_db)):
         author = db.query(User).filter(User.id == post.author_id).first()
         slots = db.query(PostSlot).filter(PostSlot.post_id == post.id).all()
         help_requests = db.query(HelpRequest).filter(HelpRequest.post_id == post.id).all()
+        comments = db.query(Comment).filter(Comment.post_id == post.id).order_by(Comment.created_at.asc()).all()
         
         post_dict = {
             "id": post.id,
@@ -814,6 +818,7 @@ def get_posts(skip: int = 0, limit: int = 50, db: Session = Depends(get_db)):
             "filled_slots": len(slots),
             "slots": [],
             "help_request_count": len(help_requests),
+            "comments": [],
             "created_at": post.created_at
         }
         
@@ -871,77 +876,137 @@ def get_posts(skip: int = 0, limit: int = 50, db: Session = Depends(get_db)):
             slot_list.append(slot_dict)
         post_dict["slots"] = slot_list
         
+        # Add comments
+        comment_list = []
+        for comment in comments:
+            comment_author = db.query(User).filter(User.id == comment.author_id).first()
+            comment_dict = {
+                "id": comment.id,
+                "post_id": comment.post_id,
+                "author_id": comment.author_id,
+                "content": comment.content,
+                "created_at": comment.created_at
+            }
+            if comment_author:
+                comment_author_dict = {
+                    "id": comment_author.id,
+                    "email": comment_author.email,
+                    "username": comment_author.username,
+                    "full_name": comment_author.full_name,
+                    "bio": comment_author.bio,
+                    "profile_picture": comment_author.profile_picture,
+                    "interests": safe_json_loads(comment_author.interests) if comment_author.interests else [],
+                    "looking_for": safe_json_loads(comment_author.looking_for) if comment_author.looking_for else [],
+                    "location": comment_author.location,
+                    "timezone": comment_author.timezone,
+                    "availability": comment_author.availability,
+                    "linkedin_url": comment_author.linkedin_url,
+                    "github_url": comment_author.github_url,
+                    "profile_type": comment_author.profile_type,
+                    "created_at": comment_author.created_at,
+                    "is_active": comment_author.is_active,
+                    "skills": []
+                }
+                comment_dict["author"] = comment_author_dict
+            comment_list.append(comment_dict)
+        post_dict["comments"] = comment_list
+        
         result.append(post_dict)
     
     return result
 
 
-@app.post("/api/posts/{post_id}/claim-slot", response_model=PostSlotResponse)
-def claim_slot(post_id: int, request: ClaimSlotRequest, db: Session = Depends(get_db)):
-    """Claim a slot in a post."""
+@app.post("/api/posts/{post_id}/request-slot", response_model=SlotRequestResponse)
+def request_slot(post_id: int, request: SlotRequestCreate, db: Session = Depends(get_db)):
+    """Request a slot in a post."""
     post = db.query(Post).filter(Post.id == post_id).first()
     if not post:
         raise HTTPException(status_code=404, detail="Post not found")
-    
+
     # Check if user exists
     user = db.query(User).filter(User.id == request.user_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
-    
-    # Check if user is the author (can't claim their own slot)
+
+    # Check if user is the author (can't request their own slot)
     if post.author_id == request.user_id:
-        raise HTTPException(status_code=400, detail="You cannot claim a slot in your own post")
-    
-    # Check if user already claimed a slot
+        raise HTTPException(status_code=400, detail="You cannot request a slot in your own post")
+
+    # Check if user already has a pending or accepted request
+    existing_request = db.query(SlotRequest).filter(
+        SlotRequest.post_id == post_id,
+        SlotRequest.requester_user_id == request.user_id,
+        SlotRequest.status.in_(["pending", "accepted"])
+    ).first()
+    if existing_request:
+        raise HTTPException(status_code=400, detail="You have already requested a slot in this post")
+
+    # Check if user already has a slot
     existing_slot = db.query(PostSlot).filter(
         PostSlot.post_id == post_id,
         PostSlot.user_id == request.user_id
     ).first()
     if existing_slot:
-        raise HTTPException(status_code=400, detail="You have already claimed a slot in this post")
-    
+        raise HTTPException(status_code=400, detail="You already have a slot in this post")
+
     # Check if all slots are filled
     filled_slots = db.query(PostSlot).filter(PostSlot.post_id == post_id).count()
     if filled_slots >= post.slot_count:
         raise HTTPException(status_code=400, detail="All slots are already filled")
-    
-    # Create slot
-    db_slot = PostSlot(
+
+    # Create slot request
+    db_slot_request = SlotRequest(
         post_id=post_id,
-        user_id=request.user_id
+        requester_user_id=request.user_id,
+        status="pending"
     )
-    db.add(db_slot)
+    db.add(db_slot_request)
+    db.flush()  # Use flush to get the ID without committing yet
+
+    # Get post author
+    post_author = db.query(User).filter(User.id == post.author_id).first()
+    
+    # Check if conversation already exists between requester and post author
+    existing_conversation = db.query(Conversation).filter(
+        ((Conversation.user1_id == request.user_id) & (Conversation.user2_id == post.author_id)) |
+        ((Conversation.user1_id == post.author_id) & (Conversation.user2_id == request.user_id))
+    ).first()
+    
+    conversation = existing_conversation
+    if not conversation:
+        # Create new conversation
+        conversation = Conversation(
+            user1_id=min(request.user_id, post.author_id),
+            user2_id=max(request.user_id, post.author_id)
+        )
+        db.add(conversation)
+        db.flush()
+    
+    # Create message with slot request
+    message_content = f"I'd like to help you with this! 🚀"
+    db_message = Message(
+        conversation_id=conversation.id,
+        sender_id=request.user_id,
+        content=message_content,
+        slot_request_id=db_slot_request.id
+    )
+    db.add(db_message)
     db.commit()
-    db.refresh(db_slot)
-    
-    # Build response
-    slot_dict = {
-        "id": db_slot.id,
-        "user_id": db_slot.user_id,
-        "created_at": db_slot.created_at
+    db.refresh(db_slot_request)
+
+    return {
+        "id": db_slot_request.id,
+        "post_id": db_slot_request.post_id,
+        "requester_user_id": db_slot_request.requester_user_id,
+        "status": db_slot_request.status,
+        "created_at": db_slot_request.created_at,
+        "requester_user": {
+            "id": user.id,
+            "username": user.username,
+            "full_name": user.full_name,
+            "profile_picture": user.profile_picture
+        }
     }
-    
-    user_dict = {
-        "id": user.id,
-        "email": user.email,
-        "username": user.username,
-        "full_name": user.full_name,
-        "bio": user.bio,
-        "profile_picture": user.profile_picture,
-        "interests": safe_json_loads(user.interests) if user.interests else [],
-        "looking_for": safe_json_loads(user.looking_for) if user.looking_for else [],
-        "location": user.location,
-        "timezone": user.timezone,
-        "availability": user.availability,
-        "linkedin_url": user.linkedin_url,
-        "github_url": user.github_url,
-        "profile_type": user.profile_type,
-        "created_at": user.created_at,
-        "is_active": user.is_active
-    }
-    slot_dict["user"] = user_dict
-    
-    return slot_dict
 
 
 @app.post("/api/posts/{post_id}/request-help", response_model=HelpRequestResponse, status_code=status.HTTP_201_CREATED)
@@ -990,6 +1055,182 @@ def request_help(post_id: int, request: HelpRequestCreate, db: Session = Depends
     }
 
 
+@app.get("/api/posts/{post_id}/slot-requests")
+def get_slot_requests(post_id: int, current_user_id: int = Query(..., description="ID of the current user"), db: Session = Depends(get_db)):
+    """Get all slot requests for a post (only for post author)."""
+    post = db.query(Post).filter(Post.id == post_id).first()
+    if not post:
+        raise HTTPException(status_code=404, detail="Post not found")
+
+    # Check if current user is the post author
+    if post.author_id != current_user_id:
+        raise HTTPException(status_code=403, detail="Only the post author can view slot requests")
+
+    slot_requests = db.query(SlotRequest).filter(SlotRequest.post_id == post_id).all()
+
+    result = []
+    for request in slot_requests:
+        user = db.query(User).filter(User.id == request.requester_user_id).first()
+        result.append({
+            "id": request.id,
+            "post_id": request.post_id,
+            "requester_user_id": request.requester_user_id,
+            "status": request.status,
+            "created_at": request.created_at,
+            "requester_user": {
+                "id": user.id,
+                "username": user.username,
+                "full_name": user.full_name,
+                "profile_picture": user.profile_picture,
+                "bio": user.bio,
+                "interests": safe_json_loads(user.interests) if user.interests else [],
+                "looking_for": safe_json_loads(user.looking_for) if user.looking_for else [],
+                "location": user.location,
+                "linkedin_url": user.linkedin_url,
+                "github_url": user.github_url
+            }
+        })
+
+    return {"slot_requests": result}
+
+
+@app.put("/api/posts/{post_id}/slot-requests/{request_id}")
+def update_slot_request(post_id: int, request_id: int, update_data: SlotRequestUpdate, current_user_id: int = Query(..., description="ID of the current user"), db: Session = Depends(get_db)):
+    """Accept or reject a slot request (only for post author)."""
+    post = db.query(Post).filter(Post.id == post_id).first()
+    if not post:
+        raise HTTPException(status_code=404, detail="Post not found")
+
+    # Check if current user is the post author
+    if post.author_id != current_user_id:
+        raise HTTPException(status_code=403, detail="Only the post author can manage slot requests")
+
+    slot_request = db.query(SlotRequest).filter(
+        SlotRequest.id == request_id,
+        SlotRequest.post_id == post_id
+    ).first()
+    if not slot_request:
+        raise HTTPException(status_code=404, detail="Slot request not found")
+
+    if update_data.status not in ["accepted", "rejected"]:
+        raise HTTPException(status_code=400, detail="Status must be 'accepted' or 'rejected'")
+
+    # Update the request status
+    slot_request.status = update_data.status
+    db.commit()
+
+    # If accepted, create a slot and check if all slots are filled
+    if update_data.status == "accepted":
+        # Check if all slots are already filled
+        filled_slots = db.query(PostSlot).filter(PostSlot.post_id == post_id).count()
+        if filled_slots >= post.slot_count:
+            raise HTTPException(status_code=400, detail="All slots are already filled")
+
+        # Create the slot
+        db_slot = PostSlot(
+            post_id=post_id,
+            user_id=slot_request.requester_user_id
+        )
+        db.add(db_slot)
+        db.commit()
+
+    return {"message": f"Slot request {update_data.status}", "slot_request": {
+        "id": slot_request.id,
+        "status": slot_request.status
+    }}
+
+
+@app.put("/api/messages/{message_id}/slot-request")
+def handle_slot_request_from_message(message_id: int, update_data: SlotRequestUpdate, current_user_id: int = Query(..., description="ID of the current user"), db: Session = Depends(get_db)):
+    """Accept or reject a slot request from a message (only for post author)."""
+    message = db.query(Message).filter(Message.id == message_id).first()
+    if not message:
+        raise HTTPException(status_code=404, detail="Message not found")
+    
+    if not message.slot_request_id:
+        raise HTTPException(status_code=400, detail="This message is not a slot request")
+    
+    slot_request = db.query(SlotRequest).filter(SlotRequest.id == message.slot_request_id).first()
+    if not slot_request:
+        raise HTTPException(status_code=404, detail="Slot request not found")
+    
+    post = db.query(Post).filter(Post.id == slot_request.post_id).first()
+    if not post:
+        raise HTTPException(status_code=404, detail="Post not found")
+    
+    # Check if current user is the post author
+    if post.author_id != current_user_id:
+        raise HTTPException(status_code=403, detail="Only the post author can manage slot requests")
+    
+    if update_data.status not in ["accepted", "rejected"]:
+        raise HTTPException(status_code=400, detail="Status must be 'accepted' or 'rejected'")
+    
+    # Update the request status
+    slot_request.status = update_data.status
+    db.commit()
+    
+    # If accepted, create a slot
+    if update_data.status == "accepted":
+        # Check if all slots are already filled
+        filled_slots = db.query(PostSlot).filter(PostSlot.post_id == slot_request.post_id).count()
+        if filled_slots >= post.slot_count:
+            raise HTTPException(status_code=400, detail="All slots are already filled")
+        
+        # Check if user already has a slot
+        existing_slot = db.query(PostSlot).filter(
+            PostSlot.post_id == slot_request.post_id,
+            PostSlot.user_id == slot_request.requester_user_id
+        ).first()
+        if existing_slot:
+            raise HTTPException(status_code=400, detail="User already has a slot in this post")
+        
+        # Create the slot
+        db_slot = PostSlot(
+            post_id=slot_request.post_id,
+            user_id=slot_request.requester_user_id
+        )
+        db.add(db_slot)
+        
+        # Get post details for the message
+        post_content_preview = post.content[:50] + "..." if post.content and len(post.content) > 50 else (post.content or "this project")
+        
+        # Send a confirmation message to the requester
+        confirmation_message = Message(
+            conversation_id=message.conversation_id,
+            sender_id=current_user_id,
+            content=f"✅ Great! I've accepted your help request for \"{post_content_preview}\". Welcome to the team! 🎉"
+        )
+        db.add(confirmation_message)
+        
+        # Update conversation timestamp so it appears at the top
+        conversation = db.query(Conversation).filter(Conversation.id == message.conversation_id).first()
+        if conversation:
+            conversation.updated_at = datetime.utcnow()
+    else:
+        # Get post details for the message
+        post_content_preview = post.content[:50] + "..." if post.content and len(post.content) > 50 else (post.content or "this project")
+        
+        # Send a rejection message to the requester
+        rejection_message = Message(
+            conversation_id=message.conversation_id,
+            sender_id=current_user_id,
+            content=f"Thank you for your interest in helping with \"{post_content_preview}\", but I've decided to go with other collaborators for this project. I appreciate your offer though! 🙏"
+        )
+        db.add(rejection_message)
+        
+        # Update conversation timestamp so it appears at the top
+        conversation = db.query(Conversation).filter(Conversation.id == message.conversation_id).first()
+        if conversation:
+            conversation.updated_at = datetime.utcnow()
+    
+    db.commit()
+    
+    return {"message": f"Slot request {update_data.status}", "slot_request": {
+        "id": slot_request.id,
+        "status": slot_request.status
+    }}
+
+
 @app.delete("/api/posts/{post_id}/slots/{slot_id}")
 def remove_slot(post_id: int, slot_id: int, user_id: int = Query(..., description="ID of the user removing the slot"), db: Session = Depends(get_db)):
     """Remove a slot (user can remove their own slot or post author can remove any slot)."""
@@ -1008,6 +1249,104 @@ def remove_slot(post_id: int, slot_id: int, user_id: int = Query(..., descriptio
     db.delete(slot)
     db.commit()
     return {"message": "Slot removed successfully"}
+
+
+@app.post("/api/posts/{post_id}/comments", response_model=CommentResponse, status_code=status.HTTP_201_CREATED)
+def create_comment(post_id: int, request: CommentCreate, db: Session = Depends(get_db)):
+    """Create a comment on a post (only for regular posts)."""
+    post = db.query(Post).filter(Post.id == post_id).first()
+    if not post:
+        raise HTTPException(status_code=404, detail="Post not found")
+
+    # Only allow comments on regular posts (not help posts)
+    if post.post_type == 'help':
+        raise HTTPException(status_code=400, detail="Comments are only allowed on 'Share a Thought' posts")
+
+    # Check if user exists
+    user = db.query(User).filter(User.id == request.author_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    # Create comment
+    db_comment = Comment(
+        post_id=post_id,
+        author_id=request.author_id,
+        content=request.content
+    )
+    db.add(db_comment)
+    db.commit()
+    db.refresh(db_comment)
+
+    return {
+        "id": db_comment.id,
+        "post_id": db_comment.post_id,
+        "author_id": db_comment.author_id,
+        "content": db_comment.content,
+        "created_at": db_comment.created_at,
+        "author": {
+            "id": user.id,
+            "email": user.email,
+            "username": user.username,
+            "full_name": user.full_name,
+            "bio": user.bio,
+            "profile_picture": user.profile_picture,
+            "interests": safe_json_loads(user.interests) if user.interests else [],
+            "looking_for": safe_json_loads(user.looking_for) if user.looking_for else [],
+            "location": user.location,
+            "timezone": user.timezone,
+            "availability": user.availability,
+            "linkedin_url": user.linkedin_url,
+            "github_url": user.github_url,
+            "profile_type": user.profile_type,
+            "created_at": user.created_at,
+            "is_active": user.is_active,
+            "skills": []
+        }
+    }
+
+
+@app.get("/api/posts/{post_id}/comments", response_model=List[CommentResponse])
+def get_comments(post_id: int, db: Session = Depends(get_db)):
+    """Get all comments for a post."""
+    post = db.query(Post).filter(Post.id == post_id).first()
+    if not post:
+        raise HTTPException(status_code=404, detail="Post not found")
+
+    comments = db.query(Comment).filter(Comment.post_id == post_id).order_by(Comment.created_at.asc()).all()
+
+    result = []
+    for comment in comments:
+        author = db.query(User).filter(User.id == comment.author_id).first()
+        comment_dict = {
+            "id": comment.id,
+            "post_id": comment.post_id,
+            "author_id": comment.author_id,
+            "content": comment.content,
+            "created_at": comment.created_at
+        }
+        if author:
+            comment_dict["author"] = {
+                "id": author.id,
+                "email": author.email,
+                "username": author.username,
+                "full_name": author.full_name,
+                "bio": author.bio,
+                "profile_picture": author.profile_picture,
+                "interests": safe_json_loads(author.interests) if author.interests else [],
+                "looking_for": safe_json_loads(author.looking_for) if author.looking_for else [],
+                "location": author.location,
+                "timezone": author.timezone,
+                "availability": author.availability,
+                "linkedin_url": author.linkedin_url,
+                "github_url": author.github_url,
+                "profile_type": author.profile_type,
+                "created_at": author.created_at,
+                "is_active": author.is_active,
+                "skills": []
+            }
+        result.append(comment_dict)
+
+    return result
 
 
 if __name__ == "__main__":

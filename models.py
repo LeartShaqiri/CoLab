@@ -187,6 +187,7 @@ class MessageResponse(BaseModel):
     sender_id: int
     content: str
     is_initial_greeting: bool
+    slot_request_id: Optional[int] = None
     read: bool
     created_at: datetime
     
@@ -244,6 +245,7 @@ class PostResponse(BaseModel):
     slots: List[PostSlotResponse] = []
     post_type: Optional[str] = "regular"
     help_request_count: Optional[int] = 0
+    comments: List["CommentResponse"] = []
     created_at: datetime
     
     model_config = {"from_attributes": True}
@@ -266,5 +268,46 @@ class HelpRequestResponse(BaseModel):
     post_id: int
     helper_user_id: int
     created_at: datetime
-    
+
+    model_config = {"from_attributes": True}
+
+
+class SlotRequestCreate(BaseModel):
+    """Model for creating a slot request."""
+    user_id: int
+
+
+class SlotRequestResponse(BaseModel):
+    """Model for slot request response."""
+    id: int
+    post_id: int
+    requester_user_id: int
+    status: str
+    created_at: datetime
+    requester_user: Optional[UserResponse] = None
+
+    model_config = {"from_attributes": True}
+
+
+class SlotRequestUpdate(BaseModel):
+    """Model for updating a slot request status."""
+    status: str  # "accepted" or "rejected"
+
+
+# Comment Models
+class CommentCreate(BaseModel):
+    """Model for creating a comment."""
+    content: str = Field(..., min_length=1, max_length=1000)
+    author_id: int
+
+
+class CommentResponse(BaseModel):
+    """Model for comment response."""
+    id: int
+    post_id: int
+    author_id: int
+    content: str
+    author: Optional[UserResponse] = None
+    created_at: datetime
+
     model_config = {"from_attributes": True}

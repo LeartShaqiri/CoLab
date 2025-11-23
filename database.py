@@ -141,12 +141,14 @@ class Message(Base):
     sender_id = Column(Integer, ForeignKey('users.id'), nullable=False)
     content = Column(Text, nullable=False)
     is_initial_greeting = Column(Boolean, default=False)  # True for the first pre-written message
+    slot_request_id = Column(Integer, ForeignKey('slot_requests.id'), nullable=True)  # Link to slot request if this is a slot request message
     read = Column(Boolean, default=False)
     created_at = Column(DateTime, default=datetime.utcnow)
     
     # Relationships
     conversation = relationship("Conversation", back_populates="messages")
     sender = relationship("User", foreign_keys=[sender_id])
+    slot_request = relationship("SlotRequest", foreign_keys=[slot_request_id])
 
 
 class Post(Base):
@@ -165,6 +167,8 @@ class Post(Base):
     author = relationship("User", foreign_keys=[author_id])
     slots = relationship("PostSlot", back_populates="post", cascade="all, delete-orphan")
     help_requests = relationship("HelpRequest", back_populates="post", cascade="all, delete-orphan")
+    slot_requests = relationship("SlotRequest", back_populates="post", cascade="all, delete-orphan")
+    comments = relationship("Comment", back_populates="post", cascade="all, delete-orphan")
 
 
 class PostSlot(Base):
@@ -184,15 +188,45 @@ class PostSlot(Base):
 class HelpRequest(Base):
     """HelpRequest model representing help requests for posts."""
     __tablename__ = 'help_requests'
-    
+
     id = Column(Integer, primary_key=True, index=True)
     post_id = Column(Integer, ForeignKey('posts.id'), nullable=False)
     helper_user_id = Column(Integer, ForeignKey('users.id'), nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
-    
+
     # Relationships
     post = relationship("Post", back_populates="help_requests")
     helper_user = relationship("User", foreign_keys=[helper_user_id])
+
+
+class SlotRequest(Base):
+    """SlotRequest model representing pending slot requests for posts."""
+    __tablename__ = 'slot_requests'
+
+    id = Column(Integer, primary_key=True, index=True)
+    post_id = Column(Integer, ForeignKey('posts.id'), nullable=False)
+    requester_user_id = Column(Integer, ForeignKey('users.id'), nullable=False)
+    status = Column(String(20), default="pending")  # "pending", "accepted", "rejected"
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    # Relationships
+    post = relationship("Post", back_populates="slot_requests")
+    requester_user = relationship("User", foreign_keys=[requester_user_id])
+
+
+class Comment(Base):
+    """Comment model representing comments on posts."""
+    __tablename__ = 'comments'
+
+    id = Column(Integer, primary_key=True, index=True)
+    post_id = Column(Integer, ForeignKey('posts.id'), nullable=False)
+    author_id = Column(Integer, ForeignKey('users.id'), nullable=False)
+    content = Column(Text, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    # Relationships
+    post = relationship("Post", back_populates="comments")
+    author = relationship("User", foreign_keys=[author_id])
 
 
 # Database setup
@@ -308,6 +342,19 @@ def migrate_db():
                     print("Added 'post_type' column to posts table")
                 except Exception as e:
                     print(f"Could not add post_type column to posts table: {e}")
+
+    # Check and migrate messages table
+    if 'messages' in table_names:
+        messages_columns = [col['name'] for col in inspector.get_columns('messages')]
+
+        with engine.begin() as conn:
+            # Add slot_request_id column if it doesn't exist
+            if 'slot_request_id' not in messages_columns:
+                try:
+                    conn.execute(text("ALTER TABLE messages ADD COLUMN slot_request_id INTEGER"))
+                    print("Added 'slot_request_id' column to messages table")
+                except Exception as e:
+                    print(f"Could not add slot_request_id column to messages table: {e}")
 
 
 def get_db():

@@ -666,15 +666,40 @@ async function loadMessages(conversationId) {
             container.innerHTML = messages.map(msg => {
                 const isOwn = msg.sender_id === currentUser.id;
                 const processedContent = processMessageContent(msg.content);
+                const hasSlotRequest = msg.slot_request_id && !isOwn; // Only show buttons for received slot requests
+                
                 return `
                     <div style="display: flex; justify-content: ${isOwn ? 'flex-end' : 'flex-start'}; margin-bottom: 8px;">
                         <div style="max-width: 70%; padding: 12px 16px; background: ${isOwn ? 'var(--primary)' : 'var(--bg)'}; color: ${isOwn ? 'white' : 'var(--text)'}; border-radius: 12px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
                             <div style="font-size: 0.9em; margin-bottom: 4px; word-wrap: break-word;">${processedContent}</div>
+                            ${hasSlotRequest ? `
+                                <div style="margin-top: 12px; padding-top: 12px; border-top: 1px solid ${isOwn ? 'rgba(255,255,255,0.2)' : 'var(--border)'}; display: flex; gap: 8px;">
+                                    <button class="btn-accept-slot" data-message-id="${msg.id}" style="flex: 1; padding: 8px 12px; background: #1dbf73; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 0.85em; font-weight: 600;">✓ Accept</button>
+                                    <button class="btn-reject-slot" data-message-id="${msg.id}" style="flex: 1; padding: 8px 12px; background: #ff4757; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 0.85em; font-weight: 600;">✗ Decline</button>
+                                </div>
+                            ` : ''}
                             <div style="font-size: 0.75em; opacity: 0.7; text-align: right; margin-top: 6px;">${new Date(msg.created_at).toLocaleTimeString()}</div>
                         </div>
                     </div>
                 `;
             }).join('');
+            
+            // Attach event listeners for slot request buttons
+            if (currentUser) {
+                container.querySelectorAll('.btn-accept-slot').forEach(btn => {
+                    btn.addEventListener('click', async (e) => {
+                        const messageId = btn.getAttribute('data-message-id');
+                        await handleSlotRequestAction(messageId, 'accepted', btn);
+                    });
+                });
+                
+                container.querySelectorAll('.btn-reject-slot').forEach(btn => {
+                    btn.addEventListener('click', async (e) => {
+                        const messageId = btn.getAttribute('data-message-id');
+                        await handleSlotRequestAction(messageId, 'rejected', btn);
+                    });
+                });
+            }
             
             container.scrollTop = container.scrollHeight;
             
@@ -683,6 +708,66 @@ async function loadMessages(conversationId) {
         }
     } catch (error) {
         container.innerHTML = `<div class="alert error">Error loading messages: ${error.message}</div>`;
+    }
+}
+
+// Handle slot request accept/reject from message
+async function handleSlotRequestAction(messageId, action, buttonElement) {
+    if (!currentUser) return;
+    
+    const originalText = buttonElement.textContent;
+    buttonElement.disabled = true;
+    buttonElement.textContent = action === 'accepted' ? 'Accepting...' : 'Declining...';
+    
+    // Disable both buttons
+    const messageDiv = buttonElement.closest('div[style*="max-width: 70%"]');
+    if (messageDiv) {
+        messageDiv.querySelectorAll('button').forEach(btn => btn.disabled = true);
+    }
+    
+    try {
+        const response = await fetch(`${API_BASE}/messages/${messageId}/slot-request?current_user_id=${currentUser.id}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ status: action })
+        });
+        
+        if (response.ok) {
+            const result = await safeJsonParse(response);
+            
+            // Update button to show status
+            buttonElement.textContent = action === 'accepted' ? '✓ Accepted' : '✗ Declined';
+            buttonElement.style.opacity = '0.7';
+            
+            // Reload messages to show the confirmation message
+            if (currentConversationId) {
+                setTimeout(() => {
+                    loadMessages(currentConversationId);
+                }, 500);
+            }
+            
+            // Reload posts to update slot counts
+            if (typeof loadPosts === 'function') {
+                setTimeout(() => {
+                    loadPosts();
+                }, 1000);
+            }
+        } else {
+            const error = await safeJsonParse(response);
+            alert(error.detail || `Failed to ${action} slot request`);
+            buttonElement.disabled = false;
+            buttonElement.textContent = originalText;
+            if (messageDiv) {
+                messageDiv.querySelectorAll('button').forEach(btn => btn.disabled = false);
+            }
+        }
+    } catch (error) {
+        alert(`Error: ${error.message}`);
+        buttonElement.disabled = false;
+        buttonElement.textContent = originalText;
+        if (messageDiv) {
+            messageDiv.querySelectorAll('button').forEach(btn => btn.disabled = false);
+        }
     }
 }
 
