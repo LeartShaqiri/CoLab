@@ -149,6 +149,37 @@ class Message(Base):
     sender = relationship("User", foreign_keys=[sender_id])
 
 
+class Post(Base):
+    """Post model representing user posts with collaboration slots."""
+    __tablename__ = 'posts'
+    
+    id = Column(Integer, primary_key=True, index=True)
+    author_id = Column(Integer, ForeignKey('users.id'), nullable=False)
+    content = Column(Text, nullable=True)  # Text content
+    image = Column(Text, nullable=True)  # Base64 image or URL
+    slot_count = Column(Integer, nullable=False, default=1)  # Number of slots (1-5)
+    post_type = Column(String(20), nullable=True, default='thought')  # 'thought' or 'help'
+    created_at = Column(DateTime, default=datetime.utcnow)
+    
+    # Relationships
+    author = relationship("User", foreign_keys=[author_id])
+    slots = relationship("PostSlot", back_populates="post", cascade="all, delete-orphan")
+
+
+class PostSlot(Base):
+    """PostSlot model representing filled slots in a post."""
+    __tablename__ = 'post_slots'
+    
+    id = Column(Integer, primary_key=True, index=True)
+    post_id = Column(Integer, ForeignKey('posts.id'), nullable=False)
+    user_id = Column(Integer, ForeignKey('users.id'), nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    
+    # Relationships
+    post = relationship("Post", back_populates="slots")
+    user = relationship("User", foreign_keys=[user_id])
+
+
 # Database setup
 SQLALCHEMY_DATABASE_URL = "sqlite:///./collab_platform.db"
 

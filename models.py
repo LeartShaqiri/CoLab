@@ -212,3 +212,43 @@ class ConversationCreate(BaseModel):
     other_user_id: int
     initial_message: str  # One of the 3 pre-written messages
 
+
+# Post Models
+class PostCreate(BaseModel):
+    """Model for creating a post."""
+    content: Optional[str] = None
+    image: Optional[str] = None  # Base64 image or URL
+    slot_count: int = Field(..., ge=1, le=5)  # Number of slots (1-5)
+    post_type: Optional[str] = Field(default="thought", description="Type of post: 'thought' or 'help'")
+
+
+class PostSlotResponse(BaseModel):
+    """Model for post slot response."""
+    id: int
+    user_id: int
+    user: Optional[UserResponse] = None
+    created_at: datetime
+    
+    model_config = {"from_attributes": True}
+
+
+class PostResponse(BaseModel):
+    """Model for post response."""
+    id: int
+    author_id: int
+    author: Optional[UserResponse] = None
+    content: Optional[str] = None
+    image: Optional[str] = None
+    slot_count: int
+    filled_slots: int = 0
+    slots: List[PostSlotResponse] = []
+    post_type: Optional[str] = "thought"
+    created_at: datetime
+    
+    model_config = {"from_attributes": True}
+
+
+class ClaimSlotRequest(BaseModel):
+    """Model for claiming a slot in a post."""
+    user_id: int
+

@@ -165,6 +165,30 @@ body {
     background: rgba(29, 191, 115, 0.1) !important;
 }
 
+/* Message Images and Links */
+#messagesContainer img {
+    max-width: 100%;
+    max-height: 300px;
+    border-radius: 8px;
+    margin: 8px 0;
+    display: block;
+    cursor: pointer;
+    transition: transform 0.2s;
+}
+
+#messagesContainer img:hover {
+    transform: scale(1.02);
+}
+
+#messagesContainer a {
+    word-break: break-all;
+    text-decoration: underline;
+}
+
+#messagesContainer a:hover {
+    opacity: 0.8;
+}
+
 /* Responsive */
 @media (max-width: 1024px) {
     .main-layout {
@@ -194,12 +218,42 @@ body {
     display: flex;
     justify-content: space-between;
     align-items: center;
+    position: relative;
+}
+
+/* Navigation Bar */
+.main-nav {
+    display: flex;
+    align-items: center;
+    gap: 30px;
+    margin-left: 20px;
+}
+
+.nav-link {
+    color: var(--text);
+    text-decoration: none;
+    font-weight: 500;
+    font-size: 1em;
+    padding: 8px 16px;
+    border-radius: 6px;
+    transition: all 0.3s ease;
+    position: relative;
+}
+
+.nav-link:hover {
+    color: var(--primary);
+    background: var(--bg-light);
+}
+
+.nav-link:active {
+    transform: scale(0.95);
 }
 
 .header-right {
     display: flex;
     align-items: center;
     gap: 15px;
+    margin-left: auto;
 }
 
 /* Dark Mode Toggle */
@@ -255,10 +309,15 @@ body {
     display: none;
 }
 
-.logo {
-    font-size: 2em;
-    font-weight: 700;
-    color: var(--primary);
+.logo-img {
+    height: 30px;
+    width: auto;
+    object-fit: contain;
+    display: block;
+    position: absolute;
+    top: 15px;
+    left: 5px;
+    z-index: 10;
 }
 
 .header-actions {
@@ -1074,6 +1133,563 @@ body {
     font-size: 1.3em;
     margin-bottom: 10px;
     color: var(--text);
+}
+
+/* Posts Feed */
+.posts-feed {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+.post-card {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px;
+    box-shadow: 0 2px 8px var(--shadow);
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.post-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px var(--shadow);
+}
+
+.post-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 15px;
+}
+
+.post-author-avatar {
+    width: 50px;
+    height: 50px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 2px solid var(--border);
+}
+
+.post-author-info h3 {
+    margin: 0;
+    font-size: 1.1em;
+    color: var(--text);
+}
+
+.post-time {
+    font-size: 0.85em;
+    color: var(--text-light);
+}
+
+.post-content {
+    margin-bottom: 15px;
+    color: var(--text);
+    line-height: 1.6;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+}
+
+.post-image {
+    margin-bottom: 15px;
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+.post-image img {
+    width: 100%;
+    max-height: 500px;
+    object-fit: contain;
+}
+
+/* Post Type Selector */
+.post-type-selector {
+    display: flex;
+    gap: 15px;
+    margin-bottom: 20px;
+}
+
+.post-type-btn {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    padding: 15px 20px;
+    border: 2px solid var(--border);
+    border-radius: 8px;
+    background: var(--bg);
+    color: var(--text);
+    font-size: 1em;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.post-type-btn:hover {
+    border-color: var(--primary);
+    background: var(--bg-light);
+}
+
+.post-type-btn.active {
+    border-color: var(--primary);
+    background: var(--primary);
+    color: white;
+}
+
+.post-type-icon {
+    font-size: 1.2em;
+}
+
+/* Create Post Form */
+.create-post-form {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 25px;
+    box-shadow: 0 2px 8px var(--shadow);
+}
+
+.create-post-form textarea {
+    width: 100%;
+    padding: 15px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    font-size: 1em;
+    font-family: inherit;
+    resize: vertical;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 120px;
+}
+
+.create-post-form textarea:focus {
+    outline: none;
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px rgba(29, 191, 115, 0.1);
+}
+
+.image-upload-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 20px;
+    border: 2px dashed var(--border);
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    color: var(--text);
+    font-weight: 500;
+}
+
+.image-upload-label:hover {
+    border-color: var(--primary);
+    background: var(--bg-light);
+}
+
+.slot-selector {
+    display: flex;
+    gap: 10px;
+    margin-top: 10px;
+}
+
+.slot-option {
+    flex: 1;
+    padding: 12px;
+    border: 2px solid var(--border);
+    border-radius: 8px;
+    background: var(--bg);
+    color: var(--text);
+    font-size: 1em;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.slot-option:hover {
+    border-color: var(--primary);
+    background: var(--bg-light);
+}
+
+.slot-option.active {
+    border-color: var(--primary);
+    background: var(--primary);
+    color: white;
+}
+
+/* Post Type Badges */
+.post-type-badge {
+    margin-left: auto;
+    padding: 6px 12px;
+    border-radius: 20px;
+    font-size: 0.85em;
+    font-weight: 600;
+}
+
+.post-type-badge.post-type-thought {
+    background: rgba(29, 191, 115, 0.1);
+    color: var(--primary);
+}
+
+.post-type-badge.post-type-help {
+    background: rgba(255, 71, 87, 0.1);
+    color: #ff4757;
+}
+
+.post-card.post-type-help {
+    border-left: 4px solid #ff4757;
+}
+
+.post-card.post-type-thought {
+    border-left: 4px solid var(--primary);
+}
+
+.post-slots-info {
+    margin-top: 15px;
+    padding: 12px;
+    background: var(--bg-light);
+    border-radius: 8px;
+    font-size: 0.9em;
+}
+
+.slot-users {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 10px;
+}
+
+.slot-user-tag {
+    padding: 6px 12px;
+    background: var(--primary);
+    color: white;
+    border-radius: 20px;
+    font-size: 0.85em;
+}
+
+/* Active nav link */
+.nav-link.active {
+    color: var(--primary);
+    font-weight: 600;
+}
+
+/* Swipeable Cards for Quick Match */
+.swipe-container {
+    max-width: 500px;
+    margin: 0 auto;
+    position: relative;
+    min-height: 600px;
+}
+
+.swipe-cards {
+    position: relative;
+    width: 100%;
+    min-height: 600px;
+}
+
+.swipe-card {
+    position: absolute;
+    width: 100%;
+    background: var(--bg);
+    border: 2px solid var(--border);
+    border-radius: 16px;
+    padding: 30px;
+    box-shadow: 0 8px 24px var(--shadow);
+    cursor: grab;
+    user-select: none;
+    transition: transform 0.3s ease-out, opacity 0.3s ease-out;
+}
+
+.swipe-card:active {
+    cursor: grabbing;
+}
+
+.swipe-card-content {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+.swipe-card-header {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    padding-bottom: 20px;
+    border-bottom: 2px solid var(--border);
+}
+
+.swipe-card-avatar {
+    width: 100px;
+    height: 100px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 4px solid var(--primary);
+    flex-shrink: 0;
+}
+
+.swipe-card-user-info h2 {
+    margin: 0;
+    font-size: 1.5em;
+    color: var(--text);
+}
+
+.swipe-card-username {
+    font-size: 1em;
+    color: var(--text-light);
+    margin-top: 5px;
+}
+
+.swipe-card-location {
+    font-size: 0.9em;
+    color: var(--text-light);
+    margin-top: 5px;
+}
+
+.swipe-card-bio {
+    font-size: 1em;
+    line-height: 1.6;
+    color: var(--text);
+    white-space: pre-wrap;
+}
+
+.swipe-card-section {
+    margin-top: 10px;
+}
+
+.swipe-card-section h4 {
+    margin: 0 0 10px 0;
+    font-size: 0.9em;
+    color: var(--text-light);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.swipe-card-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.swipe-tag {
+    padding: 6px 12px;
+    background: var(--bg-light);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    font-size: 0.85em;
+    color: var(--text);
+}
+
+.swipe-card-links {
+    display: flex;
+    gap: 15px;
+    margin-top: 10px;
+}
+
+.swipe-link {
+    padding: 8px 16px;
+    background: var(--primary);
+    color: white;
+    text-decoration: none;
+    border-radius: 8px;
+    font-size: 0.9em;
+    transition: all 0.3s ease;
+}
+
+.swipe-link:hover {
+    background: var(--primary-dark);
+    transform: translateY(-2px);
+}
+
+/* Swipe Action Buttons */
+.swipe-actions {
+    display: flex;
+    justify-content: center;
+    gap: 30px;
+    margin-top: 30px;
+    padding: 20px 0;
+}
+
+.swipe-btn {
+    width: 70px;
+    height: 70px;
+    border-radius: 50%;
+    border: 3px solid var(--border);
+    background: var(--bg);
+    color: var(--text);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.3s ease;
+    box-shadow: 0 4px 12px var(--shadow);
+}
+
+.swipe-btn:hover {
+    transform: scale(1.1);
+    box-shadow: 0 6px 16px var(--shadow);
+}
+
+.swipe-btn:active {
+    transform: scale(0.95);
+}
+
+.swipe-btn.swipe-left {
+    border-color: #ff4757;
+}
+
+.swipe-btn.swipe-left:hover {
+    background: #ff4757;
+    color: white;
+}
+
+.swipe-btn.swipe-right {
+    border-color: var(--primary);
+}
+
+.swipe-btn.swipe-right:hover {
+    background: var(--primary);
+    color: white;
+}
+
+/* Swipe Notifications */
+@keyframes slideIn {
+    from {
+        transform: translateX(100%);
+        opacity: 0;
+    }
+    to {
+        transform: translateX(0);
+        opacity: 1;
+    }
+}
+
+@keyframes slideOut {
+    from {
+        transform: translateX(0);
+        opacity: 1;
+    }
+    to {
+        transform: translateX(100%);
+        opacity: 0;
+    }
+}
+    object-fit: contain;
+    cursor: pointer;
+    transition: transform 0.2s;
+}
+
+.post-image img:hover {
+    transform: scale(1.02);
+}
+
+.post-slots {
+    margin-top: 15px;
+    padding-top: 15px;
+    border-top: 1px solid var(--border);
+}
+
+.slots-label {
+    font-size: 0.9em;
+    color: var(--text-light);
+    margin-bottom: 10px;
+    font-weight: 500;
+}
+
+.slots-container {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    align-items: center;
+}
+
+.slot-circle {
+    width: 50px;
+    height: 50px;
+    border-radius: 50%;
+    border: 3px solid var(--border);
+    background: var(--bg-light);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+    position: relative;
+    overflow: hidden;
+}
+
+.slot-circle.empty {
+    border-style: dashed;
+    border-color: var(--primary);
+}
+
+.slot-circle.empty:hover {
+    background: var(--primary);
+    border-color: var(--primary);
+    transform: scale(1.1);
+}
+
+.slot-circle.filled {
+    border-color: var(--primary);
+    background: var(--bg);
+}
+
+.slot-circle.filled:hover {
+    transform: scale(1.1);
+    box-shadow: 0 4px 8px var(--shadow);
+}
+
+.slot-circle img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.slot-plus {
+    font-size: 1.5em;
+    color: var(--primary);
+    font-weight: bold;
+}
+
+.slot-circle.empty:hover .slot-plus {
+    color: white;
+}
+
+.claim-slot-btn {
+    font-size: 0.9em;
+    padding: 8px 16px;
+}
+
+/* Slot Selector in Create Post Modal */
+.slot-selector {
+    display: flex;
+    gap: 10px;
+}
+
+.slot-option {
+    width: 50px;
+    height: 50px;
+    border-radius: 50%;
+    border: 3px solid var(--border);
+    background: var(--bg-light);
+    color: var(--text);
+    font-size: 1.2em;
+    font-weight: bold;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.slot-option:hover {
+    border-color: var(--primary);
+    background: var(--bg);
+    transform: scale(1.1);
+}
+
+.slot-option.active {
+    background: var(--primary);
+    color: white;
+    border-color: var(--primary);
 }
 
 /* Responsive */

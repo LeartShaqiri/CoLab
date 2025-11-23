@@ -23,10 +23,16 @@ async function safeJsonParse(response) {
 
 // Load users on page load
 window.addEventListener('DOMContentLoaded', () => {
+    // Initialize theme first (before other operations)
+    initDarkMode();
+    
     // Check auth first, then load users (so match percentages are included)
     checkAuth();
-    loadUsers();
-    initDarkMode();
+    
+    // Only load users if we're on the home page (index.html)
+    if (document.getElementById('usersList')) {
+        loadUsers();
+    }
 });
 
 // Dark Mode Toggle
@@ -56,7 +62,13 @@ function updateDarkModeIcon(theme) {
     }
 }
 
-document.getElementById('darkModeToggle').addEventListener('click', toggleDarkMode);
+// Setup dark mode toggle - check if element exists first
+const darkModeToggle = document.getElementById('darkModeToggle');
+if (darkModeToggle) {
+    // Remove any existing listeners to avoid duplicates
+    darkModeToggle.removeEventListener('click', toggleDarkMode);
+    darkModeToggle.addEventListener('click', toggleDarkMode);
+}
 
 // Quiz Data
 const frontendQuizzes = [
@@ -570,33 +582,81 @@ async function loadMessages(conversationId) {
                 `;
             } else {
                 inputContainer.innerHTML = `
-                    <div style="display: flex; gap: 10px; width: 100%;">
-                        <input type="text" id="messageInput" placeholder="Type your message..." style="flex: 1; padding: 12px; border: 1px solid var(--border); border-radius: 6px; font-size: 1em;">
-                        <button class="btn-primary" id="sendMessageBtn">Send</button>
+                    <div style="display: flex; flex-direction: column; gap: 10px; width: 100%;">
+                        <div style="display: flex; gap: 10px;">
+                            <input type="text" id="messageInput" placeholder="Type your message..." style="flex: 1; padding: 12px; border: 1px solid var(--border); border-radius: 6px; font-size: 1em;">
+                            <input type="file" id="imageFileInput" accept="image/*" style="display: none;">
+                            <button class="btn-secondary" id="attachImageBtn" title="Attach Image" style="padding: 12px 16px; white-space: nowrap;">📷</button>
+                            <button class="btn-primary" id="sendMessageBtn">Send</button>
+                        </div>
+                        <div id="imagePreviewContainer" style="display: none; margin-top: 10px;">
+                            <div style="position: relative; display: inline-block;">
+                                <img id="imagePreview" src="" alt="Preview" style="max-width: 200px; max-height: 200px; border-radius: 8px; border: 2px solid var(--border);">
+                                <button id="removeImageBtn" style="position: absolute; top: -8px; right: -8px; background: var(--error, #ff4757); color: white; border: none; border-radius: 50%; width: 24px; height: 24px; cursor: pointer; font-size: 14px; display: flex; align-items: center; justify-content: center;">×</button>
+                            </div>
+                        </div>
                     </div>
                 `;
                 // Re-attach event listeners
                 setTimeout(() => {
                     const messageInput = document.getElementById('messageInput');
                     const sendBtn = document.getElementById('sendMessageBtn');
+                    const attachImageBtn = document.getElementById('attachImageBtn');
+                    const imageFileInput = document.getElementById('imageFileInput');
+                    const imagePreviewContainer = document.getElementById('imagePreviewContainer');
+                    const imagePreview = document.getElementById('imagePreview');
+                    const removeImageBtn = document.getElementById('removeImageBtn');
+                    
                     if (messageInput && sendBtn) {
                         messageInput.addEventListener('keypress', (e) => {
-                            if (e.key === 'Enter') {
+                            if (e.key === 'Enter' && !e.shiftKey) {
+                                e.preventDefault();
                                 sendMessageHandler();
                             }
                         });
                         sendBtn.addEventListener('click', sendMessageHandler);
+                    }
+                    
+                    if (attachImageBtn && imageFileInput) {
+                        attachImageBtn.addEventListener('click', () => {
+                            imageFileInput.click();
+                        });
+                    }
+                    
+                    if (imageFileInput) {
+                        imageFileInput.addEventListener('change', (e) => {
+                            const file = e.target.files[0];
+                            if (file && file.type.startsWith('image/')) {
+                                const reader = new FileReader();
+                                reader.onload = (event) => {
+                                    imagePreview.src = event.target.result;
+                                    imagePreviewContainer.style.display = 'block';
+                                };
+                                reader.readAsDataURL(file);
+                            } else {
+                                alert('Please select a valid image file');
+                            }
+                        });
+                    }
+                    
+                    if (removeImageBtn) {
+                        removeImageBtn.addEventListener('click', () => {
+                            imagePreview.src = '';
+                            imagePreviewContainer.style.display = 'none';
+                            if (imageFileInput) imageFileInput.value = '';
+                        });
                     }
                 }, 100);
             }
             
             container.innerHTML = messages.map(msg => {
                 const isOwn = msg.sender_id === currentUser.id;
+                const processedContent = processMessageContent(msg.content);
                 return `
-                    <div style="display: flex; justify-content: ${isOwn ? 'flex-end' : 'flex-start'};">
+                    <div style="display: flex; justify-content: ${isOwn ? 'flex-end' : 'flex-start'}; margin-bottom: 8px;">
                         <div style="max-width: 70%; padding: 12px 16px; background: ${isOwn ? 'var(--primary)' : 'var(--bg)'}; color: ${isOwn ? 'white' : 'var(--text)'}; border-radius: 12px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
-                            <div style="font-size: 0.9em; margin-bottom: 4px;">${msg.content}</div>
-                            <div style="font-size: 0.75em; opacity: 0.7; text-align: right;">${new Date(msg.created_at).toLocaleTimeString()}</div>
+                            <div style="font-size: 0.9em; margin-bottom: 4px; word-wrap: break-word;">${processedContent}</div>
+                            <div style="font-size: 0.75em; opacity: 0.7; text-align: right; margin-top: 6px;">${new Date(msg.created_at).toLocaleTimeString()}</div>
                         </div>
                     </div>
                 `;
@@ -612,14 +672,88 @@ async function loadMessages(conversationId) {
     }
 }
 
+// Process message content to detect links and images
+function processMessageContent(content) {
+    if (!content) return '';
+    
+    // Check if content is a data URL (base64 image)
+    if (content.startsWith('data:image/')) {
+        return `<img src="${content}" alt="Uploaded Image" style="max-width: 100%; max-height: 300px; border-radius: 8px; margin: 8px 0; display: block; cursor: pointer;" onclick="window.open('${content}', '_blank')">`;
+    }
+    
+    // Split content by newlines to handle mixed content
+    const parts = content.split('\n');
+    let processedParts = [];
+    
+    for (let part of parts) {
+        // Check if this part is a data URL
+        if (part.startsWith('data:image/')) {
+            processedParts.push(`<img src="${part}" alt="Uploaded Image" style="max-width: 100%; max-height: 300px; border-radius: 8px; margin: 8px 0; display: block; cursor: pointer;" onclick="window.open('${part}', '_blank')">`);
+        } else {
+            // Escape HTML to prevent XSS
+            let escaped = escapeHtml(part);
+            
+            // Detect image URLs (common image extensions)
+            const imageRegex = /(https?:\/\/[^\s]+\.(jpg|jpeg|png|gif|webp|svg|bmp)(\?[^\s]*)?)/gi;
+            escaped = escaped.replace(imageRegex, (url) => {
+                return `<img src="${url}" alt="Image" style="max-width: 100%; max-height: 300px; border-radius: 8px; margin: 8px 0; display: block; cursor: pointer;" onclick="window.open('${url}', '_blank')" onerror="this.style.display='none'; this.nextElementSibling.style.display='block';"><a href="${url}" target="_blank" rel="noopener noreferrer" style="display: none; color: inherit; text-decoration: underline;">${url}</a>`;
+            });
+            
+            // Detect regular URLs (but not image URLs or data URLs)
+            const urlRegex = /(https?:\/\/[^\s<>"']+)/gi;
+            escaped = escaped.replace(urlRegex, (url) => {
+                // Skip if it's already been processed as an image
+                if (url.match(/\.(jpg|jpeg|png|gif|webp|svg|bmp)(\?[^\s]*)?$/i)) {
+                    return url;
+                }
+                return `<a href="${url}" target="_blank" rel="noopener noreferrer" style="color: inherit; text-decoration: underline; word-break: break-all;">${url}</a>`;
+            });
+            
+            processedParts.push(escaped);
+        }
+    }
+    
+    // Join parts with <br> for line breaks
+    return processedParts.join('<br>');
+}
+
+// Helper function to escape HTML
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
 function sendMessageHandler() {
     const input = document.getElementById('messageInput');
+    const imagePreview = document.getElementById('imagePreview');
+    const imagePreviewContainer = document.getElementById('imagePreviewContainer');
     if (!input) return;
     
     const message = input.value.trim();
-    if (!message || !currentConversationId || !currentUser) return;
+    const imageDataUrl = imagePreview ? imagePreview.src : '';
     
-    sendMessageToConversation(message);
+    if (!message && !imageDataUrl) return;
+    if (!currentConversationId || !currentUser) return;
+    
+    // Combine message and image
+    let finalMessage = message;
+    if (imageDataUrl && imageDataUrl !== '') {
+        if (finalMessage) {
+            finalMessage += '\n' + imageDataUrl;
+        } else {
+            finalMessage = imageDataUrl;
+        }
+    }
+    
+    sendMessageToConversation(finalMessage);
+    
+    // Clear inputs
+    input.value = '';
+    if (imagePreview) imagePreview.src = '';
+    if (imagePreviewContainer) imagePreviewContainer.style.display = 'none';
+    const imageFileInput = document.getElementById('imageFileInput');
+    if (imageFileInput) imageFileInput.value = '';
 }
 
 async function sendMessageToConversation(message) {

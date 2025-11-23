@@ -11,7 +11,12 @@
     <header class="main-header">
         <div class="container">
             <div class="header-content">
-                <h1 class="logo">CoLab</h1>
+                <!-- Navigation Bar -->
+                <nav class="main-nav">
+                    <a href="/" class="nav-link">Home</a>
+                    <a href="/post" class="nav-link">Post</a>
+                    <a href="/quickmatch" class="nav-link">Quick Match</a>
+                </nav>
                 <div class="header-right">
                     <button class="dark-mode-toggle" id="darkModeToggle" title="Toggle Dark Mode">
                         <svg class="moon-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -60,6 +65,15 @@
 
     <main class="main-layout">
         <div class="container main-content">
+            <!-- Posts Feed Section -->
+            <section class="section posts-section">
+                <div class="section-header">
+                    <h2>Posts</h2>
+                    <button id="createPostBtn" class="btn-primary" style="display: none;">Create Post</button>
+                </div>
+                <div id="postsFeed" class="posts-feed"></div>
+            </section>
+
             <!-- Browse Users Section (Main Page) -->
             <section class="section browse-section">
                 <div class="section-header">
@@ -253,6 +267,40 @@
                     </div>
                 </div>
             </div>
+        </div>
+    </div>
+
+    <!-- Create Post Modal -->
+    <div id="createPostModal" class="modal">
+        <div class="modal-content">
+            <span class="close">&times;</span>
+            <h2>Create Post</h2>
+            <form id="createPostForm">
+                <div class="form-group">
+                    <textarea id="postContent" placeholder="What's on your mind?" rows="4" style="width: 100%; padding: 12px; border: 1px solid var(--border); border-radius: 6px; font-size: 1em; font-family: inherit; resize: vertical;"></textarea>
+                </div>
+                <div class="form-group">
+                    <label>Upload Image (optional)</label>
+                    <input type="file" id="postImageInput" accept="image/*" style="margin-top: 8px;">
+                    <div id="postImagePreview" style="margin-top: 10px; display: none;">
+                        <img id="postImagePreviewImg" src="" alt="Preview" style="max-width: 100%; max-height: 300px; border-radius: 8px; border: 2px solid var(--border);">
+                        <button type="button" id="removePostImageBtn" style="margin-top: 8px; padding: 6px 12px; background: var(--error, #ff4757); color: white; border: none; border-radius: 4px; cursor: pointer;">Remove Image</button>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>Number of Collaboration Slots (1-5)</label>
+                    <div class="slot-selector" style="display: flex; gap: 10px; margin-top: 10px;">
+                        <button type="button" class="slot-option" data-slots="1">1</button>
+                        <button type="button" class="slot-option" data-slots="2">2</button>
+                        <button type="button" class="slot-option" data-slots="3">3</button>
+                        <button type="button" class="slot-option" data-slots="4">4</button>
+                        <button type="button" class="slot-option" data-slots="5">5</button>
+                    </div>
+                    <input type="hidden" id="selectedSlots" value="1">
+                </div>
+                <button type="submit" class="btn-primary">Post</button>
+            </form>
+            <div id="postResult" class="alert"></div>
         </div>
     </div>
 
