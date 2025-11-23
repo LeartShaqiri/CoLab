@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Quick Match - CoLab</title>
+    <title>AI Match - CoLab</title>
     <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
@@ -15,8 +15,8 @@
                 <nav class="main-nav">
                     <a href="/" class="nav-link">Home</a>
                     <a href="/post" class="nav-link">Post</a>
-                    <a href="/quickmatch" class="nav-link active">Quick Match</a>
-                    <a href="/aimatch" class="nav-link">AI Match</a>
+                    <a href="/quickmatch" class="nav-link">Quick Match</a>
+                    <a href="/aimatch" class="nav-link active">AI Match</a>
                 </nav>
                 <div class="header-right">
                     <button class="dark-mode-toggle" id="darkModeToggle" title="Toggle Dark Mode">
@@ -66,35 +66,105 @@
 
     <main class="main-layout">
         <div class="container main-content">
-            <!-- Quick Match Section -->
+            <!-- AI Match Section -->
             <section class="section search-section">
                 <div class="section-header">
-                    <h2>Quick Match</h2>
-                    <p style="color: var(--text-light); margin-top: 10px;">Swipe right to connect, left to skip</p>
+                    <h2>🤖 AI Match</h2>
+                    <p style="color: var(--text-light); margin-top: 10px;">Get personalized recommendations based on your interests</p>
                 </div>
-                
-                <!-- Swipeable Cards Container -->
-                <div id="swipeContainer" class="swipe-container">
-                    <div id="swipeCards" class="swipe-cards"></div>
-                    <div id="noMoreCards" class="empty-state" style="display: none;">
-                        <h3>🎉 All done!</h3>
-                        <p>You've seen all available users. Check back later for more matches.</p>
+
+                <!-- Match Result Card -->
+                <div id="matchCard" class="match-card" style="display: none;">
+                    <div class="match-header">
+                        <div class="match-badge">
+                            <span class="ai-icon">🤖</span>
+                            <span>Perfect Match</span>
+                        </div>
+                        <div class="match-percentage" id="matchPercentage"></div>
+                    </div>
+
+                    <div class="user-card-large">
+                        <div class="user-card-header">
+                            <img id="matchProfileImg" src="" alt="Profile" class="user-avatar-large" onerror="this.src='data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%22120%22 height=%22120%22%3E%3Ccircle cx=%2260%22 cy=%2260%22 r=%2255%22 fill=%22%231dbf73%22/%3E%3Ctext x=%2260%22 y=%2268%22 font-size=%2236%22 fill=%22white%22 text-anchor=%22middle%22%3E?%3C/text%3E%3C/svg%3E'">
+                            <div class="user-info-large">
+                                <h3 id="matchName"></h3>
+                                <p class="username" id="matchUsername"></p>
+                                <div class="profile-type" id="matchProfileType"></div>
+                            </div>
+                        </div>
+
+                        <div class="user-details">
+                            <div class="bio-section">
+                                <h4>About</h4>
+                                <p id="matchBio"></p>
+                            </div>
+
+                            <div class="interests-section">
+                                <h4>Interests</h4>
+                                <div class="tags-container" id="matchInterests"></div>
+                            </div>
+
+                            <div class="skills-section">
+                                <h4>Skills</h4>
+                                <div class="tags-container" id="matchSkills"></div>
+                            </div>
+
+                            <div class="location-section">
+                                <h4>Location & Availability</h4>
+                                <p id="matchLocation"></p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="match-insight">
+                        <h4>💡 Why you should team up</h4>
+                        <div class="insight-card">
+                            <p id="matchSuggestion"></p>
+                        </div>
+                    </div>
+
+                    <div class="match-actions">
+                        <button class="btn-primary" id="connectBtn">Message</button>
+                        <button class="btn-secondary" id="findAnotherBtn">Find Another Match</button>
                     </div>
                 </div>
-                
-                <!-- Action Buttons -->
-                <div id="actionButtons" class="swipe-actions" style="display: none;">
-                    <button class="swipe-btn swipe-left" id="swipeLeftBtn" title="Skip">
-                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <line x1="18" y1="6" x2="6" y2="18"></line>
-                            <line x1="6" y1="6" x2="18" y2="18"></line>
-                        </svg>
-                    </button>
-                    <button class="swipe-btn swipe-right" id="swipeRightBtn" title="Connect">
-                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M20 6L9 17l-5-5"></path>
-                        </svg>
-                    </button>
+
+                <!-- Loading State -->
+                <div id="loadingState" class="loading-state" style="display: none;">
+                    <div class="loading-spinner"></div>
+                    <p>AI is finding your perfect match...</p>
+                </div>
+
+                <!-- Error State -->
+                <div id="errorState" class="error-state" style="display: none;">
+                    <h3>😔 No matches found</h3>
+                    <p>Try updating your interests or check back later for more users.</p>
+                    <button class="btn-primary" id="retryBtn">Try Again</button>
+                </div>
+
+                <!-- Initial State -->
+                <div id="initialState" class="initial-state">
+                    <div class="ai-match-hero">
+                        <div class="hero-content">
+                            <h3>Let AI find your perfect collaborator</h3>
+                            <p>Based on your interests and skills, our AI will recommend the best person for you to team up with.</p>
+                            <button class="btn-primary large" id="findMatchBtn">Find My Match</button>
+                        </div>
+                        <div class="hero-illustration">
+                            <div class="ai-brain">
+                                🤖
+                            </div>
+                            <div class="connection-lines">
+                                <div class="line line-1"></div>
+                                <div class="line line-2"></div>
+                                <div class="line line-3"></div>
+                            </div>
+                            <div class="user-icons">
+                                <div class="user-icon user-1">👨‍💻</div>
+                                <div class="user-icon user-2">👩‍💻</div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </section>
         </div>
@@ -204,7 +274,6 @@
     </div>
 
     <script src="/static/app.js"></script>
-    <script src="/static/quickmatch.js"></script>
+    <script src="/static/aimatch.js"></script>
 </body>
 </html>
-

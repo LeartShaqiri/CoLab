@@ -123,6 +123,14 @@ async def quickmatch_page():
         return FileResponse(html_file)
     return HTMLResponse(content="<h1>Quick Match Page</h1><p>Page not found.</p>")
 
+@app.get("/aimatch", response_class=HTMLResponse)
+async def aimatch_page():
+    """Serve the AI match page."""
+    html_file = os.path.join(static_dir, "aimatch.html")
+    if os.path.exists(html_file):
+        return FileResponse(html_file)
+    return HTMLResponse(content="<h1>AI Match Page</h1><p>Page not found.</p>")
+
 
 # ========== User Endpoints ==========
 
@@ -483,6 +491,118 @@ def find_matches(match_request: MatchRequest, db: Session = Depends(get_db)):
         ))
     
     return MatchResponse(matches=match_details, total_found=len(match_details))
+
+
+def generate_teaming_suggestion(match_percentage: float, user_skills: List[str], candidate_skills: List[str]) -> str:
+    """Generate a random suggestion for why two users would be good for teaming up."""
+    import random
+
+    suggestions = [
+        "Your complementary skills would create a well-rounded team for full-stack development!",
+        "Together, you could tackle complex projects that require diverse technical expertise.",
+        "Your skill sets align perfectly for collaborative coding and problem-solving.",
+        "This partnership could lead to innovative solutions combining your unique perspectives.",
+        "Your combined knowledge would make you unstoppable in tackling challenging development tasks.",
+        "Perfect match for building robust applications with both frontend and backend expertise!",
+        "Your skills complement each other beautifully for comprehensive project development.",
+        "Together, you'd have the perfect balance of creativity and technical implementation.",
+        "This collaboration could result in more efficient and high-quality code delivery.",
+        "Your combined skill sets would allow you to handle any development challenge that comes your way."
+    ]
+
+    # Add skill-specific suggestions
+    if any(skill.lower() in ['python', 'django', 'flask'] for skill in user_skills + candidate_skills):
+        suggestions.append("Python expertise combined with your complementary skills would make for excellent web development projects!")
+
+    if any(skill.lower() in ['javascript', 'react', 'node.js'] for skill in user_skills + candidate_skills):
+        suggestions.append("JavaScript skills paired with your abilities would create a powerful frontend-backend duo!")
+
+    if any(skill.lower() in ['php', 'laravel', 'symfony'] for skill in user_skills + candidate_skills):
+        suggestions.append("PHP development combined with your complementary skills would excel in server-side projects!")
+
+    # High match bonus
+    if match_percentage > 0.7:
+        suggestions.append("Your interests align exceptionally well - this could be the start of a great long-term collaboration!")
+
+    return random.choice(suggestions)
+
+
+@app.get("/api/aimatch/{user_id}")
+def get_ai_match(user_id: int, db: Session = Depends(get_db)):
+    """Get an AI-powered interest-based match recommendation for a user."""
+    user = db.query(User).filter(User.id == user_id, User.is_active == True).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    # Get all other active users
+    all_users = db.query(User).filter(User.id != user_id, User.is_active == True).all()
+
+    if not all_users:
+        raise HTTPException(status_code=404, detail="No other users available for matching")
+
+    # Find the best interest match
+    best_match = None
+    best_score = -1
+    best_details = None
+
+    from matching import get_interest_match_for_user
+
+    for candidate in all_users:
+        # Skip if no interests
+        user_interests = safe_json_loads(user.interests)
+        candidate_interests = safe_json_loads(candidate.interests)
+
+        if not user_interests or not candidate_interests:
+            continue
+
+        # Calculate interest match
+        interest_score = get_interest_match_for_user(user, candidate)
+
+        if interest_score > best_score:
+            best_score = interest_score
+            best_match = candidate
+            best_details = {
+                "interest_match": interest_score,
+                "user_interests": user_interests,
+                "candidate_interests": candidate_interests
+            }
+
+    if not best_match:
+        raise HTTPException(status_code=404, detail="No suitable interest-based matches found")
+
+    # Get candidate skills
+    candidate_skills = [s.name for s in best_match.skills]
+
+    # Generate teaming suggestion
+    suggestion = generate_teaming_suggestion(
+        best_score,
+        [s.name for s in user.skills],
+        candidate_skills
+    )
+
+    # Format response
+    candidate_dict = {
+        "id": best_match.id,
+        "email": best_match.email,
+        "username": best_match.username,
+        "full_name": best_match.full_name,
+        "bio": best_match.bio,
+        "profile_picture": best_match.profile_picture,
+        "interests": safe_json_loads(best_match.interests),
+        "looking_for": safe_json_loads(best_match.looking_for),
+        "location": best_match.location,
+        "timezone": best_match.timezone,
+        "availability": best_match.availability,
+        "linkedin_url": best_match.linkedin_url,
+        "github_url": best_match.github_url,
+        "profile_type": best_match.profile_type,
+        "skills": [{"id": s.id, "name": s.name, "category": s.category} for s in best_match.skills],
+        "created_at": best_match.created_at,
+        "interest_match": best_score,
+        "teaming_suggestion": suggestion
+    }
+
+    return candidate_dict
 
 
 # ========== Connection Endpoints ==========

@@ -22,17 +22,48 @@ async function safeJsonParse(response) {
 }
 
 // Load users on page load
+// Global modal close handler - set up immediately for all pages
+// Use event delegation to handle all close buttons, even dynamically created ones
+document.addEventListener('click', function(e) {
+    // Check if clicked element is a close button or inside one
+    const closeBtn = e.target.closest('.close') || (e.target.classList.contains('close') ? e.target : null);
+    
+    if (closeBtn) {
+        e.preventDefault();
+        e.stopPropagation();
+        
+        // Check if it has a data-modal attribute (specific modal)
+        const modalId = closeBtn.getAttribute('data-modal');
+        if (modalId) {
+            const modal = document.getElementById(modalId);
+            if (modal) {
+                modal.style.display = 'none';
+                return;
+            }
+        }
+        
+        // Default behavior - close the closest modal
+        const modal = closeBtn.closest('.modal');
+        if (modal) {
+            modal.style.display = 'none';
+        }
+    }
+});
+
 window.addEventListener('DOMContentLoaded', () => {
     // Initialize theme first (before other operations)
     initDarkMode();
-    
+
     // Check auth first, then load users (so match percentages are included)
     checkAuth();
-    
+
     // Only load users if we're on the home page (index.html)
     if (document.getElementById('usersList')) {
         loadUsers();
     }
+
+    // Initialize navigation event listeners for all pages
+    initNavigationListeners();
 });
 
 // Dark Mode Toggle
@@ -417,8 +448,16 @@ function showUserProfile() {
         profileName.textContent = `${emoji} ${currentUser.full_name}`;
     }
 
-    if (currentUser && currentUser.profile_picture && profileImg) {
-        profileImg.src = currentUser.profile_picture;
+    if (profileImg) {
+        // Clear any existing image first
+        profileImg.src = '';
+
+        if (currentUser && currentUser.profile_picture) {
+            profileImg.src = currentUser.profile_picture;
+        } else {
+            // Set default profile picture for users without one
+            profileImg.src = 'data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%2255%22 height=%2255%22%3E%3Ccircle cx=%2227.5%22 cy=%2227.5%22 r=%2225%22 fill=%22%231dbf73%22/%3E%3Ctext x=%2227.5%22 y=%2232%22 font-size=%2218%22 fill=%22white%22 text-anchor=%22middle%22%3E?%3C/text%3E%3C/svg%3E';
+        }
     }
     
     // Display profile type badge
@@ -432,6 +471,26 @@ function showUserProfile() {
 
     const searchSection = document.getElementById('searchSection');
     if (searchSection) searchSection.style.display = 'block';
+
+    // Set up navigation button event listeners now that user profile is shown
+    const messagesBtn = document.getElementById('messagesBtn');
+    const editProfileBtn = document.getElementById('editProfileBtn');
+    const logoutBtn = document.getElementById('logoutBtn');
+
+    if (messagesBtn) {
+        messagesBtn.addEventListener('click', showConversationsList);
+    }
+    if (editProfileBtn) {
+        editProfileBtn.addEventListener('click', () => {
+            openProfileModal();
+        });
+    }
+    if (logoutBtn) {
+        logoutBtn.addEventListener('click', () => {
+            hideUserProfile();
+        });
+    }
+
     updateMessageBadge(); // Load message count
 }
 
@@ -448,27 +507,58 @@ function hideUserProfile() {
     localStorage.removeItem('currentUser');
 }
 
-// Modal handling
-const loginModal = document.getElementById('loginModal');
-const signupModal = document.getElementById('signupModal');
-const profileModal = document.getElementById('profileModal');
-const userViewModal = document.getElementById('userViewModal');
+// Initialize navigation event listeners
+function initNavigationListeners() {
 
-document.getElementById('loginBtn').addEventListener('click', () => {
-    loginModal.style.display = 'block';
-});
+    // Modal handling
+    const loginModal = document.getElementById('loginModal');
+    const signupModal = document.getElementById('signupModal');
+    const profileModal = document.getElementById('profileModal');
+    const userViewModal = document.getElementById('userViewModal');
 
-document.getElementById('signupBtn').addEventListener('click', () => {
-    signupModal.style.display = 'block';
-});
+    // Navigation button event listeners
+    const loginBtn = document.getElementById('loginBtn');
+    const signupBtn = document.getElementById('signupBtn');
+    const editProfileBtn = document.getElementById('editProfileBtn');
+    const logoutBtn = document.getElementById('logoutBtn');
 
-document.getElementById('editProfileBtn').addEventListener('click', () => {
-    openProfileModal();
-});
+    if (loginBtn) {
+        loginBtn.addEventListener('click', () => {
+            if (loginModal) loginModal.style.display = 'block';
+        });
+    }
 
-document.getElementById('logoutBtn').addEventListener('click', () => {
-    hideUserProfile();
-});
+    if (signupBtn) {
+        signupBtn.addEventListener('click', () => {
+            if (signupModal) signupModal.style.display = 'block';
+        });
+    }
+
+    // Initialize modal close handlers
+    initModalHandlers(loginModal, signupModal, profileModal, userViewModal);
+
+    // Back to conversations button (only exists in messaging modal)
+    const backToConversationsBtn = document.getElementById('backToConversationsBtn');
+    if (backToConversationsBtn) {
+        backToConversationsBtn.addEventListener('click', () => {
+            showConversationsList();
+        });
+    }
+
+    // Periodically update message badge (every 30 seconds)
+    setInterval(() => {
+        if (currentUser) {
+            updateMessageBadge();
+        }
+    }, 30000);
+
+    // Click outside modal to close
+    window.addEventListener('click', (e) => {
+        if (e.target.classList.contains('modal')) {
+            e.target.style.display = 'none';
+        }
+    });
+}
 
 // Message button
 // Messaging functionality
@@ -1017,31 +1107,6 @@ window.openConversation = async function(conversationId, userId, userName) {
     loadMessages(conversationId);
 }
 
-document.getElementById('messagesBtn').addEventListener('click', showConversationsList);
-
-document.getElementById('backToConversationsBtn').addEventListener('click', () => {
-    showConversationsList();
-});
-
-// Periodically update message badge (every 30 seconds)
-setInterval(() => {
-    if (currentUser) {
-        updateMessageBadge();
-    }
-}, 30000);
-
-
-document.querySelectorAll('.close').forEach(closeBtn => {
-    closeBtn.addEventListener('click', (e) => {
-        e.target.closest('.modal').style.display = 'none';
-    });
-});
-
-window.addEventListener('click', (e) => {
-    if (e.target.classList.contains('modal')) {
-        e.target.style.display = 'none';
-    }
-});
 
 // View user profile (public - accessible to everyone)
 async function viewUserProfile(userId) {
