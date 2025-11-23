@@ -690,25 +690,8 @@ function processMessageContent(content) {
         if (part.startsWith('data:image/')) {
             processedParts.push(`<img src="${part}" alt="Uploaded Image" style="max-width: 100%; max-height: 300px; border-radius: 8px; margin: 8px 0; display: block; cursor: pointer;" onclick="window.open('${part}', '_blank')">`);
         } else {
-            // Escape HTML to prevent XSS
+            // Escape HTML to prevent XSS - don't convert URLs to links
             let escaped = escapeHtml(part);
-            
-            // Detect image URLs (common image extensions)
-            const imageRegex = /(https?:\/\/[^\s]+\.(jpg|jpeg|png|gif|webp|svg|bmp)(\?[^\s]*)?)/gi;
-            escaped = escaped.replace(imageRegex, (url) => {
-                return `<img src="${url}" alt="Image" style="max-width: 100%; max-height: 300px; border-radius: 8px; margin: 8px 0; display: block; cursor: pointer;" onclick="window.open('${url}', '_blank')" onerror="this.style.display='none'; this.nextElementSibling.style.display='block';"><a href="${url}" target="_blank" rel="noopener noreferrer" style="display: none; color: inherit; text-decoration: underline;">${url}</a>`;
-            });
-            
-            // Detect regular URLs (but not image URLs or data URLs)
-            const urlRegex = /(https?:\/\/[^\s<>"']+)/gi;
-            escaped = escaped.replace(urlRegex, (url) => {
-                // Skip if it's already been processed as an image
-                if (url.match(/\.(jpg|jpeg|png|gif|webp|svg|bmp)(\?[^\s]*)?$/i)) {
-                    return url;
-                }
-                return `<a href="${url}" target="_blank" rel="noopener noreferrer" style="color: inherit; text-decoration: underline; word-break: break-all;">${url}</a>`;
-            });
-            
             processedParts.push(escaped);
         }
     }

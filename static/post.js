@@ -1,7 +1,6 @@
 // Post page specific functionality
 const API_BASE = '/api';
-let currentPostType = 'thought'; // 'thought' or 'help'
-let selectedImage = null;
+let currentPostType = 'regular'; // 'regular' or 'help'
 
 // Initialize page
 window.addEventListener('DOMContentLoaded', () => {
@@ -9,8 +8,8 @@ window.addEventListener('DOMContentLoaded', () => {
     initDarkMode();
     checkAuth();
     handlePostFormVisibility();
+    initPostModal();
     initPostTypeSelector();
-    initImageUpload();
     initSlotSelector();
     loadPosts();
     
@@ -65,39 +64,62 @@ function updateDarkModeIcon(theme) {
     }
 }
 
-// Check authentication and show/hide post form
+// Check authentication and show/hide post button
 function handlePostFormVisibility() {
-    const createPostSection = document.querySelector('.create-post-section');
+    const createPostBtn = document.getElementById('openPostModalBtn');
     const userData = localStorage.getItem('currentUser');
     
-    if (!userData && createPostSection) {
-        createPostSection.style.display = 'none';
-    } else if (createPostSection) {
-        createPostSection.style.display = 'block';
+    if (!userData && createPostBtn) {
+        createPostBtn.style.display = 'none';
+    } else if (createPostBtn) {
+        createPostBtn.style.display = 'flex';
+    }
+}
+
+// Initialize post modal
+function initPostModal() {
+    const modal = document.getElementById('postModal');
+    const openBtn = document.getElementById('openPostModalBtn');
+    const closeBtn = document.getElementById('closePostModal');
+    
+    if (openBtn) {
+        openBtn.addEventListener('click', () => {
+            if (modal) modal.style.display = 'block';
+        });
+    }
+    
+    if (closeBtn) {
+        closeBtn.addEventListener('click', () => {
+            if (modal) modal.style.display = 'none';
+        });
+    }
+    
+    // Close modal when clicking outside
+    if (modal) {
+        window.addEventListener('click', (e) => {
+            if (e.target === modal) {
+                modal.style.display = 'none';
+            }
+        });
     }
 }
 
 // Post type selector
 function initPostTypeSelector() {
-    const thoughtBtn = document.getElementById('thoughtBtn');
-    const helpBtn = document.getElementById('helpBtn');
+    const thoughtBtn = document.getElementById('modalThoughtBtn');
+    const helpBtn = document.getElementById('modalHelpBtn');
     const slotGroup = document.getElementById('slotGroup');
-    
-    const selectedPostTypeDiv = document.getElementById('selectedPostType');
-    const selectedTypeText = document.getElementById('selectedTypeText');
     
     if (thoughtBtn) {
         thoughtBtn.addEventListener('click', (e) => {
             e.preventDefault();
-            currentPostType = 'thought';
+            currentPostType = 'regular';
             thoughtBtn.classList.add('active');
             if (helpBtn) helpBtn.classList.remove('active');
             if (slotGroup) slotGroup.style.display = 'none';
             const selectedSlots = document.getElementById('selectedSlots');
             if (selectedSlots) selectedSlots.value = '1';
-            if (selectedPostTypeDiv) selectedPostTypeDiv.style.display = 'block';
-            if (selectedTypeText) selectedTypeText.textContent = 'Share a Thought';
-            console.log('Post type selected: thought');
+            console.log('Post type selected: regular');
         });
     }
     
@@ -108,74 +130,11 @@ function initPostTypeSelector() {
             helpBtn.classList.add('active');
             if (thoughtBtn) thoughtBtn.classList.remove('active');
             if (slotGroup) slotGroup.style.display = 'block';
-            if (selectedPostTypeDiv) selectedPostTypeDiv.style.display = 'block';
-            if (selectedTypeText) selectedTypeText.textContent = 'Need Help';
             console.log('Post type selected: help');
         });
     }
-    
-    // Show selected type indicator on page load (default is thought)
-    if (selectedPostTypeDiv && selectedTypeText) {
-        selectedPostTypeDiv.style.display = 'block';
-        selectedTypeText.textContent = 'Share a Thought';
-    }
 }
 
-// Image upload with size validation
-function initImageUpload() {
-    const imageInput = document.getElementById('postImageInput');
-    const imagePreview = document.getElementById('postImagePreview');
-    const imagePreviewImg = document.getElementById('postImagePreviewImg');
-    const removeBtn = document.getElementById('removePostImageBtn');
-    const imageError = document.getElementById('imageError');
-    
-    if (imageInput) {
-        imageInput.addEventListener('change', (e) => {
-            const file = e.target.files[0];
-            if (!file) return;
-            
-            // Check file size (max 2MB)
-            const maxSize = 2 * 1024 * 1024; // 2MB in bytes
-            if (file.size > maxSize) {
-                imageError.style.display = 'block';
-                imageError.className = 'alert error';
-                imageError.textContent = 'Image size must be less than 2MB. Please choose a smaller image.';
-                imageInput.value = '';
-                selectedImage = null;
-                return;
-            }
-            
-            // Check if it's an image
-            if (!file.type.startsWith('image/')) {
-                imageError.style.display = 'block';
-                imageError.className = 'alert error';
-                imageError.textContent = 'Please select a valid image file.';
-                imageInput.value = '';
-                selectedImage = null;
-                return;
-            }
-            
-            // Read and preview image
-            const reader = new FileReader();
-            reader.onload = (event) => {
-                selectedImage = event.target.result; // Base64 string
-                imagePreviewImg.src = selectedImage;
-                imagePreview.style.display = 'block';
-                imageError.style.display = 'none';
-            };
-            reader.readAsDataURL(file);
-        });
-    }
-    
-    if (removeBtn) {
-        removeBtn.addEventListener('click', () => {
-            selectedImage = null;
-            imagePreview.style.display = 'none';
-            if (imageInput) imageInput.value = '';
-            if (imageError) imageError.style.display = 'none';
-        });
-    }
-}
 
 // Slot selector
 function initSlotSelector() {
@@ -236,7 +195,7 @@ async function handlePostSubmit(e) {
         // Prepare post data
         const postData = {
             content: content,
-            image: selectedImage || null,
+            image: null,
             slot_count: currentPostType === 'help' ? parseInt(document.getElementById('selectedSlots').value) : 1,
             post_type: currentPostType
         };
@@ -258,22 +217,21 @@ async function handlePostSubmit(e) {
             const post = await safeJsonParse(response);
             showPostResult('Post created successfully!', 'success');
             
-            // Reset form
+            // Reset form and close modal
             document.getElementById('createPostForm').reset();
-            selectedImage = null;
-            const imagePreview = document.getElementById('postImagePreview');
-            if (imagePreview) imagePreview.style.display = 'none';
-            const imageInput = document.getElementById('postImageInput');
-            if (imageInput) imageInput.value = '';
             
             // Reset post type to default
-            currentPostType = 'thought';
-            const thoughtBtn = document.getElementById('thoughtBtn');
-            const helpBtn = document.getElementById('helpBtn');
+            currentPostType = 'regular';
+            const thoughtBtn = document.getElementById('modalThoughtBtn');
+            const helpBtn = document.getElementById('modalHelpBtn');
             const slotGroup = document.getElementById('slotGroup');
             if (thoughtBtn) thoughtBtn.classList.add('active');
             if (helpBtn) helpBtn.classList.remove('active');
             if (slotGroup) slotGroup.style.display = 'none';
+            
+            // Close modal
+            const modal = document.getElementById('postModal');
+            if (modal) modal.style.display = 'none';
             
             // Reload posts and scroll to the new post
             setTimeout(async () => {
@@ -346,9 +304,9 @@ async function loadPosts() {
                 const initials = author.full_name ? author.full_name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2) : '?';
                 const avatar = author.profile_picture || `data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%2250%22 height=%2250%22%3E%3Ccircle cx=%2225%22 cy=%2225%22 r=%2223%22 fill=%22%231dbf73%22/%3E%3Ctext x=%2225%22 y=%2230%22 font-size=%2216%22 fill=%22white%22 text-anchor=%22middle%22%3E${initials}%3C/text%3E%3C/svg%3E`;
                 
-                const postType = post.post_type || 'thought';
+                const postType = post.post_type || 'regular';
                 const postTypeLabel = postType === 'help' ? '🆘 Need Help' : '💭 Share a Thought';
-                const postTypeClass = postType === 'help' ? 'post-type-help' : 'post-type-thought';
+                const postTypeClass = postType === 'help' ? 'post-type-help' : 'post-type-regular';
                 
                 const timeAgo = getTimeAgo(new Date(post.created_at));
                 
@@ -360,7 +318,17 @@ async function loadPosts() {
                                 <h3>${author.full_name || 'Unknown User'}</h3>
                                 <div class="post-time">${timeAgo}</div>
                             </div>
-                            <div class="post-type-badge ${postTypeClass}">${postTypeLabel}</div>
+                            <div style="display: flex; align-items: center; gap: 10px; margin-left: auto;">
+                                <div class="post-type-badge ${postTypeClass}">${postTypeLabel}</div>
+                                ${postType === 'help' ? `
+                                    <div class="post-menu">
+                                        <button class="post-menu-btn" type="button" aria-label="Post options">⋯</button>
+                                        <div class="post-dropdown-menu">
+                                            <button class="request-help-btn" data-post-id="${post.id}" type="button">Request to Help</button>
+                                        </div>
+                                    </div>
+                                ` : ''}
+                            </div>
                         </div>
                         <div class="post-content">${escapeHtml(post.content || '')}</div>
                         ${post.image ? `
@@ -384,11 +352,117 @@ async function loadPosts() {
                     </div>
                 `;
             }).join('');
+            
+            // Attach event listeners for three-dots menu and request help buttons
+            attachPostMenuListeners();
         } else {
             postsFeed.innerHTML = '<div class="alert error">Failed to load posts</div>';
         }
     } catch (error) {
         postsFeed.innerHTML = `<div class="alert error">Error: ${error.message}</div>`;
+    }
+}
+
+// Attach event listeners for post menu and request help functionality
+function attachPostMenuListeners() {
+    // Three-dots menu toggle
+    const menuButtons = document.querySelectorAll('.post-menu-btn');
+    menuButtons.forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const menu = btn.nextElementSibling;
+            const isVisible = menu.style.display === 'block';
+            
+            // Close all other menus
+            document.querySelectorAll('.post-dropdown-menu').forEach(m => {
+                m.style.display = 'none';
+            });
+            
+            // Toggle current menu
+            menu.style.display = isVisible ? 'none' : 'block';
+        });
+    });
+    
+    // Close menus when clicking outside
+    document.addEventListener('click', (e) => {
+        if (!e.target.closest('.post-menu')) {
+            document.querySelectorAll('.post-dropdown-menu').forEach(menu => {
+                menu.style.display = 'none';
+            });
+        }
+    });
+    
+    // Request to Help button handlers
+    const requestHelpButtons = document.querySelectorAll('.request-help-btn');
+    requestHelpButtons.forEach(btn => {
+        btn.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            const postId = btn.getAttribute('data-post-id');
+            await handleRequestHelp(postId, btn);
+        });
+    });
+}
+
+// Handle Request to Help action
+async function handleRequestHelp(postId, buttonElement) {
+    // Check if user is logged in
+    const userData = localStorage.getItem('currentUser');
+    if (!userData) {
+        alert('Please login first to request to help');
+        return;
+    }
+    
+    const currentUser = JSON.parse(userData);
+    const originalText = buttonElement.textContent;
+    
+    // Disable button and show loading state
+    buttonElement.disabled = true;
+    buttonElement.textContent = 'Requesting...';
+    
+    try {
+        const response = await fetch(`${API_BASE}/posts/${postId}/request-help`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                helper_user_id: currentUser.id
+            })
+        });
+        
+        if (response.ok) {
+            buttonElement.textContent = 'Requested ✓';
+            buttonElement.disabled = true;
+            buttonElement.style.opacity = '0.6';
+            
+            // Close the dropdown menu
+            const menu = buttonElement.closest('.post-dropdown-menu');
+            if (menu) {
+                menu.style.display = 'none';
+            }
+            
+            // Show success message
+            const postCard = buttonElement.closest('.post-card');
+            if (postCard) {
+                const successMsg = document.createElement('div');
+                successMsg.className = 'alert success';
+                successMsg.textContent = 'Help request sent successfully!';
+                successMsg.style.marginTop = '10px';
+                postCard.appendChild(successMsg);
+                
+                // Remove message after 3 seconds
+                setTimeout(() => {
+                    successMsg.remove();
+                }, 3000);
+            }
+        } else {
+            const error = await safeJsonParse(response);
+            alert(error.detail || 'Failed to send help request');
+            buttonElement.disabled = false;
+            buttonElement.textContent = originalText;
+        }
+    } catch (error) {
+        alert(`Error: ${error.message}`);
+        buttonElement.disabled = false;
+        buttonElement.textContent = originalText;
     }
 }
 

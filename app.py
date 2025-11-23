@@ -11,7 +11,7 @@ from typing import List, Optional
 import os
 
 from database import (
-    init_db, get_db, User, Skill, Project, Match, Conversation, Message, Post, PostSlot,
+    init_db, get_db, User, Skill, Project, Match, Conversation, Message, Post, PostSlot, HelpRequest,
     user_skills, project_skills
 )
 from models import (
@@ -20,7 +20,8 @@ from models import (
     MatchRequest, MatchResponse, MatchDetail,
     ConnectionRequest, ConnectionResponse,
     MessageCreate, MessageResponse, ConversationResponse, ConversationCreate,
-    PostCreate, PostResponse, PostSlotResponse, ClaimSlotRequest
+    PostCreate, PostResponse, PostSlotResponse, ClaimSlotRequest,
+    HelpRequestCreate, HelpRequestResponse
 )
 from matching import find_best_matches
 import hashlib
@@ -748,7 +749,7 @@ def create_post(post: PostCreate, author_id: int = Query(..., description="ID of
         content=post.content,
         image=post.image,
         slot_count=post.slot_count,
-        post_type=post.post_type or 'thought'
+        post_type=post.post_type or 'regular'
     )
     db.add(db_post)
     db.commit()
@@ -756,16 +757,17 @@ def create_post(post: PostCreate, author_id: int = Query(..., description="ID of
     
     # Build response with author info
     post_dict = {
-        "id": db_post.id,
-        "author_id": db_post.author_id,
-        "content": db_post.content,
-        "image": db_post.image,
-        "slot_count": db_post.slot_count,
-        "post_type": db_post.post_type or 'thought',
-        "filled_slots": 0,
-        "slots": [],
-        "created_at": db_post.created_at
-    }
+            "id": db_post.id,
+            "author_id": db_post.author_id,
+            "content": db_post.content,
+            "image": db_post.image,
+            "slot_count": db_post.slot_count,
+            "post_type": db_post.post_type or 'regular',
+            "filled_slots": 0,
+            "slots": [],
+            "help_request_count": 0,
+            "created_at": db_post.created_at
+        }
     
     # Add author info
     author_dict = {
@@ -800,6 +802,7 @@ def get_posts(skip: int = 0, limit: int = 50, db: Session = Depends(get_db)):
     for post in posts:
         author = db.query(User).filter(User.id == post.author_id).first()
         slots = db.query(PostSlot).filter(PostSlot.post_id == post.id).all()
+        help_requests = db.query(HelpRequest).filter(HelpRequest.post_id == post.id).all()
         
         post_dict = {
             "id": post.id,
@@ -807,9 +810,10 @@ def get_posts(skip: int = 0, limit: int = 50, db: Session = Depends(get_db)):
             "content": post.content,
             "image": post.image,
             "slot_count": post.slot_count,
-            "post_type": post.post_type or 'thought',
+            "post_type": post.post_type or 'regular',
             "filled_slots": len(slots),
             "slots": [],
+            "help_request_count": len(help_requests),
             "created_at": post.created_at
         }
         
@@ -938,6 +942,52 @@ def claim_slot(post_id: int, request: ClaimSlotRequest, db: Session = Depends(ge
     slot_dict["user"] = user_dict
     
     return slot_dict
+
+
+@app.post("/api/posts/{post_id}/request-help", response_model=HelpRequestResponse, status_code=status.HTTP_201_CREATED)
+def request_help(post_id: int, request: HelpRequestCreate, db: Session = Depends(get_db)):
+    """Request to help on a post."""
+    # Check if post exists
+    post = db.query(Post).filter(Post.id == post_id).first()
+    if not post:
+        raise HTTPException(status_code=404, detail="Post not found")
+    
+    # Check if post is a help post
+    if post.post_type != 'help':
+        raise HTTPException(status_code=400, detail="This endpoint is only for help posts")
+    
+    # Check if user exists
+    user = db.query(User).filter(User.id == request.helper_user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    # Check if user is the author (can't request to help on their own post)
+    if post.author_id == request.helper_user_id:
+        raise HTTPException(status_code=400, detail="You cannot request to help on your own post")
+    
+    # Check if user already requested to help
+    existing_request = db.query(HelpRequest).filter(
+        HelpRequest.post_id == post_id,
+        HelpRequest.helper_user_id == request.helper_user_id
+    ).first()
+    if existing_request:
+        raise HTTPException(status_code=400, detail="You have already requested to help on this post")
+    
+    # Create help request
+    db_help_request = HelpRequest(
+        post_id=post_id,
+        helper_user_id=request.helper_user_id
+    )
+    db.add(db_help_request)
+    db.commit()
+    db.refresh(db_help_request)
+    
+    return {
+        "id": db_help_request.id,
+        "post_id": db_help_request.post_id,
+        "helper_user_id": db_help_request.helper_user_id,
+        "created_at": db_help_request.created_at
+    }
 
 
 @app.delete("/api/posts/{post_id}/slots/{slot_id}")

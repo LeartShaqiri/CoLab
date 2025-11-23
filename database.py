@@ -158,12 +158,13 @@ class Post(Base):
     content = Column(Text, nullable=True)  # Text content
     image = Column(Text, nullable=True)  # Base64 image or URL
     slot_count = Column(Integer, nullable=False, default=1)  # Number of slots (1-5)
-    post_type = Column(String(20), nullable=True, default='thought')  # 'thought' or 'help'
+    post_type = Column(String(20), nullable=True, default='regular')  # 'regular' or 'help'
     created_at = Column(DateTime, default=datetime.utcnow)
     
     # Relationships
     author = relationship("User", foreign_keys=[author_id])
     slots = relationship("PostSlot", back_populates="post", cascade="all, delete-orphan")
+    help_requests = relationship("HelpRequest", back_populates="post", cascade="all, delete-orphan")
 
 
 class PostSlot(Base):
@@ -178,6 +179,20 @@ class PostSlot(Base):
     # Relationships
     post = relationship("Post", back_populates="slots")
     user = relationship("User", foreign_keys=[user_id])
+
+
+class HelpRequest(Base):
+    """HelpRequest model representing help requests for posts."""
+    __tablename__ = 'help_requests'
+    
+    id = Column(Integer, primary_key=True, index=True)
+    post_id = Column(Integer, ForeignKey('posts.id'), nullable=False)
+    helper_user_id = Column(Integer, ForeignKey('users.id'), nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    
+    # Relationships
+    post = relationship("Post", back_populates="help_requests")
+    helper_user = relationship("User", foreign_keys=[helper_user_id])
 
 
 # Database setup
